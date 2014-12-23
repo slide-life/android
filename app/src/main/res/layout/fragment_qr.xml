@@ -1,0 +1,12 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+             xmlns:tools="http://schemas.android.com/tools"
+             android:layout_width="match_parent"
+             android:layout_height="match_parent"
+             tools:context="life.slide.app.RequestsActivity$QRFragment">
+
+    <Button
+            android:layout_width="match_parent"
+            android:layout_height="180dp"
+            android:text="SCAN"
+            android:id="@+id/scanButton" android:layout_gravity="left|top"/>
+</FrameLayout>

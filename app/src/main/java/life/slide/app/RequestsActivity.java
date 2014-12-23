@@ -360,10 +360,12 @@ public class RequestsActivity extends ActionBarActivity implements ActionBar.Tab
             requestsList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
                 @Override
                 public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                    Log.i(TAG, "Clicked...");
                     Request req = requestAdapter.getItem(position);
 
                     Intent requestActivityIntent = new Intent(view.getContext(), RequestActivity.class);
                     requestActivityIntent.putExtra("request", req.toJson());
+                    Log.i(TAG, "Starting request activity...");
                     startActivity(requestActivityIntent);
                 }
             });

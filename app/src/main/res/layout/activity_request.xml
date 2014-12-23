@@ -12,27 +12,19 @@
             android:layout_width="fill_parent"
             android:layout_height="wrap_content" android:layout_alignParentRight="true"
             android:layout_alignParentEnd="true" android:layout_alignParentLeft="true"
-            android:layout_alignParentTop="true" android:layout_centerHorizontal="true" android:id="@+id/requestLabel"/>
+            android:layout_alignParentTop="true" android:layout_centerHorizontal="true" android:id="@+id/requestLabel"
+            android:gravity="center" android:textStyle="bold" android:textSize="25dp"/>
     <RelativeLayout
             android:layout_width="fill_parent"
             android:layout_height="fill_parent"
             android:layout_alignParentLeft="true" android:layout_alignParentStart="true"
             android:layout_below="@+id/requestLabel" android:layout_alignStart="@id/requestLabel">
-        <ScrollView
+        <LinearLayout
+                android:orientation="vertical"
                 android:layout_width="fill_parent"
-                android:layout_height="fill_parent"
-                android:id="@+id/scrollForm" android:layout_alignParentLeft="true"
-                android:layout_alignParentStart="true"
-                android:layout_alignParentRight="true" android:layout_centerHorizontal="true"
-                android:layout_alignParentEnd="false" android:layout_above="@+id/submitButton">
-            <LinearLayout
-                    android:orientation="vertical"
-                    android:layout_width="fill_parent"
-                    android:layout_height="fill_parent" android:layout_below="@+id/requestLabel"
-                    android:layout_alignParentRight="true" android:layout_alignParentEnd="true" android:gravity="top"
-                    android:id="@+id/form">
-            </LinearLayout>
-        </ScrollView>
+                android:layout_height="fill_parent" android:layout_above="@+id/submitButton"
+                android:layout_alignParentTop="true" android:layout_centerHorizontal="true" android:id="@+id/form">
+        </LinearLayout>
         <Button
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"

@@ -4,6 +4,7 @@ import android.app.ActionBar;
 import android.content.Intent;
 import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.util.Pair;
 import android.view.*;
 import android.widget.*;
@@ -16,6 +17,8 @@ import java.util.Set;
 import java.util.concurrent.Future;
 
 public class RequestActivity extends ActionBarActivity {
+    private static final String TAG = "Slide -> RequestActivity";
+
     public Request request;
 
     public TextView requestLabel;
@@ -65,37 +68,50 @@ public class RequestActivity extends ActionBarActivity {
     }
 
     private void initializeForm() {
+        fields = new HashMap<String, View>();
+
         for (String blockName : request.blocks) {
+            Log.i(TAG, "Processing block " + blockName);
             //create block
             BlockItem block = new BlockItem(blockName);
             Pair<String, Set<String>> options = block.getOptions();
 
-            RelativeLayout blockEntry = new RelativeLayout(this);
+            LinearLayout blockEntry = new LinearLayout(this);
+            LayoutParams blockEntryParams = new LayoutParams(
+                    LayoutParams.MATCH_PARENT,
+                    40
+            );
+            blockEntry.setLayoutParams(blockEntryParams);
+            form.addView(blockEntry);
 
             //label
             TextView blockLabel = new TextView(this);
+            blockLabel.setText(blockName);
             blockLabel.setWidth(LayoutParams.WRAP_CONTENT);
             blockLabel.setHeight(LayoutParams.WRAP_CONTENT);
-            RelativeLayout.LayoutParams labelParams = (RelativeLayout.LayoutParams) blockLabel.getLayoutParams();
-            labelParams.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
-            blockLabel.setLayoutParams(labelParams);
+
             blockEntry.addView(blockLabel);
 
             if (options.second.isEmpty()) {
+                Log.i(TAG, "Empty block " + blockName);
                 EditText editor = new EditText(this);
-                editor.setWidth(blockEntry.getWidth());
-                editor.setHeight(LayoutParams.WRAP_CONTENT);
-                RelativeLayout.LayoutParams editorParams = (RelativeLayout.LayoutParams) editor.getLayoutParams();
-                editorParams.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
+                LayoutParams editorParams = new LayoutParams(
+                        form.getWidth() - 100,
+                        40
+                );
                 editor.setLayoutParams(editorParams);
+
                 blockEntry.addView(editor);
 
                 fields.put(block.getBlockName(), editor);
             } else {
+                Log.i(TAG, "Full block " + blockName);
                 Spinner spinner = new Spinner(this);
 
-                RelativeLayout.LayoutParams spinnerParams = (RelativeLayout.LayoutParams) spinner.getLayoutParams();
-                spinnerParams.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
+                LayoutParams spinnerParams = new LayoutParams(
+                        form.getWidth() - 100,
+                        40
+                );
                 spinner.setLayoutParams(spinnerParams);
 
                 ArrayList<String> optionsList = new ArrayList<String>(options.second);
@@ -110,7 +126,6 @@ public class RequestActivity extends ActionBarActivity {
                 fields.put(block.getBlockName(), spinner);
             }
 
-            form.addView(blockEntry);
         }
     }
 

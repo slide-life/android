@@ -1,5 +1,6 @@
 package life.slide.app;
 
+import android.app.ActionBar;
 import android.content.Context;
 import android.content.Intent;
 import android.support.v7.app.ActionBarActivity;
@@ -7,6 +8,7 @@ import android.os.Bundle;
 import android.util.Log;
 import android.util.Pair;
 import android.view.*;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.*;
 import android.widget.LinearLayout.LayoutParams;
 import com.google.common.util.concurrent.FutureCallback;
@@ -21,6 +23,9 @@ import java.util.Set;
 
 public class RequestActivity extends ActionBarActivity {
     private static final String TAG = "Slide -> RequestActivity";
+    private static final int LABEL_WIDTH = 500;
+    private static final int ELEMENT_HEIGHT = 80;
+    private static final int TEXT_SIZE = 20;
 
     public Request request;
 
@@ -34,7 +39,8 @@ public class RequestActivity extends ActionBarActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_request);
 
-        //TODO: modify ActionBar title
+        ActionBar ab = getActionBar();
+        if (ab != null) ab.setTitle("Confirm request");
 
         Intent intent = getIntent();
         request = new Request(intent.getStringExtra("request"));
@@ -83,7 +89,7 @@ public class RequestActivity extends ActionBarActivity {
             LinearLayout blockEntry = new LinearLayout(this);
             LayoutParams blockEntryParams = new LayoutParams(
                     LayoutParams.MATCH_PARENT,
-                    40
+                    ELEMENT_HEIGHT
             );
             blockEntry.setLayoutParams(blockEntryParams);
             form.addView(blockEntry);
@@ -93,50 +99,71 @@ public class RequestActivity extends ActionBarActivity {
     }
 
     private void createBlockEntry(LinearLayout blockEntry, BlockItem block) {
-        Pair<String, Set<String>> options = block.getOptions();
         String blockName = block.getBlockName();
 
         //label
         TextView blockLabel = new TextView(this);
         blockLabel.setText(blockName);
-        blockLabel.setWidth(LayoutParams.WRAP_CONTENT);
-        blockLabel.setHeight(LayoutParams.WRAP_CONTENT);
+        LayoutParams labelParams = new LayoutParams(
+                LayoutParams.WRAP_CONTENT,
+                LayoutParams.WRAP_CONTENT
+        );
+        blockLabel.setGravity(Gravity.TOP);
+        blockLabel.setLayoutParams(labelParams);
+        blockLabel.setTextSize(TEXT_SIZE);
 
         blockEntry.addView(blockLabel);
 
-        if (options.second.isEmpty()) {
-            Log.i(TAG, "Empty block " + blockName);
-            EditText editor = new EditText(this);
-            LayoutParams editorParams = new LayoutParams(
-                    form.getWidth() - 100,
-                    40
-            );
-            editor.setLayoutParams(editorParams);
-
-            blockEntry.addView(editor);
-
-            fields.put(block.getBlockName(), editor);
+        if (block.hasOptions()) {
+            initializeSpinner(block, blockEntry);
         } else {
-            Log.i(TAG, "Full block " + blockName);
-            Spinner spinner = new Spinner(this);
-
-            LayoutParams spinnerParams = new LayoutParams(
-                    form.getWidth() - 100,
-                    40
-            );
-            spinner.setLayoutParams(spinnerParams);
-
-            ArrayList<String> optionsList = new ArrayList<String>(options.second);
-            int posOfDefault = optionsList.indexOf(options.first);
-            SpinnerAdapter adapter = new ArrayAdapter<String>(
-                    this, android.R.layout.simple_list_item_1, optionsList);
-            spinner.setAdapter(adapter);
-            spinner.setSelection(posOfDefault);
-
-            blockEntry.addView(spinner);
-
-            fields.put(block.getBlockName(), spinner);
+            initializeEditor(block, blockEntry);
         }
+    }
+
+    private void initializeEditor(BlockItem block, LinearLayout blockEntry) {
+        String blockName = block.getBlockName();
+        Log.i(TAG, "Empty block " + blockName);
+
+        EditText editor = new EditText(this);
+        editor.setTextSize(TEXT_SIZE / 2);
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        imm.showSoftInput(editor, InputMethodManager.SHOW_IMPLICIT);
+
+        LayoutParams editorParams = new LayoutParams(
+                LayoutParams.FILL_PARENT,
+                ELEMENT_HEIGHT
+        );
+        editor.setLayoutParams(editorParams);
+
+        blockEntry.addView(editor);
+
+        fields.put(blockName, editor);
+    }
+
+    private void initializeSpinner(BlockItem block, LinearLayout blockEntry) {
+        String blockName = block.getBlockName();
+        Log.i(TAG, "Full block " + blockName);
+
+        Pair<String, Set<String>> options = block.getOptions();
+        Spinner spinner = new Spinner(this);
+
+        LayoutParams spinnerParams = new LayoutParams(
+                LayoutParams.FILL_PARENT,
+                ELEMENT_HEIGHT
+        );
+        spinner.setLayoutParams(spinnerParams);
+
+        ArrayList<String> optionsList = new ArrayList<String>(options.second);
+        int posOfDefault = optionsList.indexOf(options.first);
+        SpinnerAdapter adapter = new ArrayAdapter<String>(
+                this, android.R.layout.simple_list_item_1, optionsList);
+        spinner.setAdapter(adapter);
+        spinner.setSelection(posOfDefault);
+
+        blockEntry.addView(spinner);
+
+        fields.put(blockName, spinner);
     }
 
     private void initializeSubmit() {
@@ -156,12 +183,16 @@ public class RequestActivity extends ActionBarActivity {
                         input = ((Spinner) blockEditView).getSelectedItem().toString();
 
                     if (!input.isEmpty()) {
+                        //add block to index and add default option to block
                         BlockItem block = new BlockItem(blockName);
                         block.addOption(input);
 
+                        //set value of data
                         blockValues.put(blockName, input);
                     }
                 }
+
+                Log.i(TAG, "Data map obtained: " + blockValues);
 
                 submitData(blockValues);
             }
@@ -172,6 +203,7 @@ public class RequestActivity extends ActionBarActivity {
         //encrypt data and send to server
         final Context context = this;
         Map<String, String> encodedBlockValues = SlideServices.encrypt(blockValues, request.pubKey);
+        Log.i(TAG, "Encoded values: " + encodedBlockValues.toString());
 
         ListeningExecutorService service = SlideServices.newExecutorService();
         ListenableFuture<Boolean> submission = SlideServices.postData(service, encodedBlockValues, request);
@@ -190,6 +222,7 @@ public class RequestActivity extends ActionBarActivity {
 
             @Override
             public void onFailure(Throwable t) {
+                Log.i(TAG, "Failure of submission: " + t.getMessage());
                         /* TODO:
                          * - display toast error message on UI thread.
                          */

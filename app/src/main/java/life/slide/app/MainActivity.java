@@ -117,6 +117,7 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
             super(fm);
         }
 
+        //this is where the fragments for the different tabs are set.
         @Override
         public Fragment getItem(int position) {
             switch (position) {

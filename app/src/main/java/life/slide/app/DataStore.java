@@ -4,9 +4,12 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
 import android.provider.ContactsContract;
+import android.util.Log;
 import android.util.Pair;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -17,6 +20,7 @@ import java.util.Set;
 public class DataStore {
     private static DataStore singletonInstance;
 
+    private final String TAG = "Slide -> DataStore";
     private final String BLOCK_STORAGE_FILE = "blocks";
     private final String REQUEST_STORAGE_FILE = "requests";
 
@@ -34,6 +38,8 @@ public class DataStore {
     }
 
     public DataStore(Context context) {
+        Log.i(TAG, "dataStore instance");
+
         this.context = context;
         this.blocks = context.getSharedPreferences(BLOCK_STORAGE_FILE, Context.MODE_PRIVATE);
         this.requests = context.getSharedPreferences(REQUEST_STORAGE_FILE, Context.MODE_PRIVATE);
@@ -63,6 +69,10 @@ public class DataStore {
         return ret;
     }
 
+    public boolean inIndex(String blockName) {
+        return getIndex(blocks).contains(blockName);
+    }
+
     public Pair<String, Set<String>> getBlockOptions(String blockName) {
         String defaultOption = blocks.getString(blockName, "");
         Set<String> blockOptions = blocks.getStringSet(
@@ -71,6 +81,8 @@ public class DataStore {
     }
 
     public boolean addOptionToBlock(String blockName, String option) {
+        addToIndex(blocks, blockName);
+
         Set<String> options = blocks.getStringSet(getOptionsName(blockName), new HashSet<String>());
         options.add(option);
 
@@ -97,21 +109,23 @@ public class DataStore {
     }
 
     private void addToIndex(SharedPreferences prefs, String item) {
-        Set<String> currentIndex = prefs.getStringSet("index", new HashSet<String>());
+        Set<String> currentIndex = getIndex(prefs);
         currentIndex.add(item);
         putIndex(prefs, currentIndex);
     }
 
     private void removeFromIndex(SharedPreferences prefs, String item) {
-        Set<String> currentIndex = prefs.getStringSet("index", new HashSet<String>());
+        Set<String> currentIndex = getIndex(prefs);
         currentIndex.remove(item);
         putIndex(prefs, currentIndex);
     }
 
     private void putIndex(SharedPreferences prefs, Set<String> index) {
+        index = new HashSet<String>(index); //necessary because of vagaries of Set and SharedPrefs
         Editor editor = prefs.edit();
+        editor.putString("history", new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date()));
         editor.putStringSet("index", index);
-        editor.apply();
+        editor.commit();
     }
 
     private String getOptionsName(String blockName) {

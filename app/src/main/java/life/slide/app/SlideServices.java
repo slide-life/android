@@ -229,12 +229,19 @@ public class SlideServices {
     }
 
     private static PublicKey publicKeyFromString(String pem) {
+        pem = new String(Base64.decode(pem.getBytes(), Base64.DEFAULT)); //get raw pem
+        Log.i(TAG, "Pem obtained: " + pem);
+
         String finalPem = pem.
-                replace("-----BEGIN PUBLIC KEY-----\n", "").
-                replace("-----END PUBLIC KEY-----", "");
+                replace("-----BEGIN PUBLIC KEY-----", "").
+                replace("-----END PUBLIC KEY-----", "").
+                replaceAll("\\s+", "");
+        Log.i(TAG, "Base64: " + finalPem);
+
         byte[] decoded = Base64.decode(finalPem, Base64.DEFAULT);
         X509EncodedKeySpec spec = new X509EncodedKeySpec(decoded);
         KeyFactory kf;
+
         try {
             kf = KeyFactory.getInstance("RSA");
             return kf.generatePublic(spec);

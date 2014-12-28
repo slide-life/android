@@ -16,6 +16,10 @@ public class BlockItem {
         this.dataStore = DataStore.getSingletonInstance();
     }
 
+    public boolean hasOptions() {
+        return dataStore.inIndex(getBlockName());
+    }
+
     public String getBlockName() {
         return this.blockName;
     }

@@ -51,7 +51,6 @@ public class GcmIntentService extends IntentService {
                         String requestJson = intent.getStringExtra("json");
                         Log.i(TAG, "Json request received: " + requestJson);
 
-                        dataStore.insertRawRequest(requestJson);
 
                         //send out intent
                         Intent received = new Intent(REQUEST_INTENT);

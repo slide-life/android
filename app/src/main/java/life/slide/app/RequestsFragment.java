@@ -33,7 +33,12 @@ public class RequestsFragment extends android.support.v4.app.Fragment {
     public BroadcastReceiver recv = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            Request request = new Request(intent.getStringExtra("request"));
+            String requestJson = intent.getStringExtra("request");
+            Log.i(TAG, "Received: " + requestJson);
+
+            dataStore.insertRawRequest(requestJson);
+
+            Request request = new Request(requestJson);
             requests.add(request);
             requestAdapter.notifyDataSetChanged();
         }

@@ -69,6 +69,8 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
                             .setTabListener(this));
         }
 
+        //TODO: download all the blocks first
+
         prefs = getGCMPreferences();
         if (checkPlayServices()) {
             gcm = GoogleCloudMessaging.getInstance(this);

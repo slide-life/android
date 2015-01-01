@@ -1,6 +1,7 @@
 package life.slide.app;
 
 import android.util.Pair;
+import org.json.JSONObject;
 
 import java.util.Set;
 
@@ -14,6 +15,10 @@ public class BlockItem {
     public BlockItem(String blockName) {
         this.blockName = blockName;
         this.dataStore = DataStore.getSingletonInstance();
+    }
+
+    public BlockItem(JSONObject blockJson) {
+        //TODO
     }
 
     public boolean hasOptions() {

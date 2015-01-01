@@ -10,6 +10,12 @@ import java.util.ArrayList;
  * Created by Michael on 12/22/2014.
  */
 public class Request {
+    private final String CHANNEL_ID = "id"; //TODO: update the SharedPrefs xml in the tests
+    private final String NAME = "name";
+    private final String DESCRIPTION = "description";
+    private final String BLOCKS = "blocks";
+    private final String PUBLIC_KEY = "key";
+
     public String channelId;
     public String name;
     public String description;
@@ -29,16 +35,16 @@ public class Request {
         try {
             JSONObject object = new JSONObject(json);
 
-            JSONArray blocksJson = object.getJSONArray("blocks");
+            JSONArray blocksJson = object.getJSONArray(BLOCKS);
             ArrayList<String> retBlocks = new ArrayList<String>();
             for (int i = 0; i < blocksJson.length(); i++)
-                retBlocks.add(blocksJson.getString(i));
+                retBlocks.add(blocksJson.getString(i)); //TODO: replace with getObject
 
-            this.channelId = object.getString("channelId");
-            this.name = object.getString("name");
-            this.description = object.getString("description");
+            this.channelId = object.getString(CHANNEL_ID);
+            this.name = object.getString(NAME);
+            this.description = object.getString(DESCRIPTION);
             this.blocks = retBlocks;
-            this.pubKey = object.getString("pubKey");
+            this.pubKey = object.getString(PUBLIC_KEY);
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -52,13 +58,13 @@ public class Request {
     public String toJson() {
         JSONObject object = new JSONObject();
         try {
-            object.put("channelId", channelId);
-            object.put("name", name);
-            object.put("description", description);
-            object.put("pubKey", pubKey);
+            object.put(CHANNEL_ID, channelId);
+            object.put(NAME, name);
+            object.put(DESCRIPTION, description);
+            object.put(PUBLIC_KEY, pubKey);
 
             JSONArray blocksJson = new JSONArray(blocks);
-            object.put("blocks", blocksJson);
+            object.put(BLOCKS, blocksJson);
 
             return object.toString();
         } catch (JSONException e) {

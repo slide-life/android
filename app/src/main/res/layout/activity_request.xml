@@ -10,28 +10,24 @@
 
     <TextView
             android:layout_width="fill_parent"
-            android:layout_height="wrap_content" android:layout_alignParentRight="true"
-            android:layout_alignParentEnd="true" android:layout_alignParentLeft="true"
-            android:layout_alignParentTop="true" android:layout_centerHorizontal="true" android:id="@+id/requestLabel"
-            android:gravity="center" android:textStyle="bold" android:textSize="25dp"/>
-    <RelativeLayout
+            android:layout_height="wrap_content"
+            android:layout_alignParentLeft="true"
+            android:layout_alignParentTop="true" android:id="@+id/requestLabel"
+            android:gravity="center" android:textStyle="bold" android:textSize="25dp"
+            android:layout_alignParentRight="true" android:layout_alignParentEnd="true"/>
+    <WebView
             android:layout_width="fill_parent"
-            android:layout_height="fill_parent"
-            android:layout_alignParentLeft="true" android:layout_alignParentStart="true"
-            android:layout_below="@+id/requestLabel" android:layout_alignStart="@id/requestLabel">
-        <LinearLayout
-                android:orientation="vertical"
-                android:layout_width="fill_parent"
-                android:layout_height="fill_parent" android:layout_above="@+id/submitButton"
-                android:layout_alignParentTop="true" android:layout_centerHorizontal="true" android:id="@+id/form">
-        </LinearLayout>
-        <Button
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="CONFIRM"
-                android:id="@+id/submitButton" android:layout_alignParentBottom="true" android:layout_alignParentLeft="true"
-                android:layout_alignParentStart="true" android:layout_alignParentRight="true"
-                android:layout_alignParentEnd="true"/>
-    </RelativeLayout>
+            android:layout_height="wrap_content"
+            android:id="@+id/webForm" android:layout_below="@+id/requestLabel" android:layout_alignParentLeft="true"
+            android:layout_alignParentStart="true"
+            android:layout_alignParentRight="true" android:layout_alignParentEnd="true"
+            android:layout_above="@+id/submitButton"/>
+    <Button
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:text="Submit"
+            android:id="@+id/submitButton" android:layout_alignParentBottom="true" android:layout_alignParentLeft="true"
+            android:layout_alignParentStart="true" android:layout_alignRight="@+id/webForm"
+            android:layout_alignEnd="@+id/webForm" android:layout_alignParentEnd="true"/>
 
 </RelativeLayout>

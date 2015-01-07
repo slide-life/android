@@ -57,7 +57,7 @@ public class DataStore {
     }
 
     public void commitRequestList(ArrayList<Request> requestList) {
-        Set<String> requestSet = new HashSet<String>();
+        Set<String> requestSet = new HashSet<>();
         for (Request r : requestList) requestSet.add(r.toJson());
         putIndex(requests, requestSet);
     }
@@ -76,14 +76,14 @@ public class DataStore {
     public Pair<String, Set<String>> getBlockOptions(String blockName) {
         String defaultOption = blocks.getString(blockName, "");
         Set<String> blockOptions = blocks.getStringSet(
-                getOptionsName(blockName), new HashSet<String>());
-        return new Pair<String, Set<String>>(defaultOption, blockOptions);
+                getOptionsName(blockName), new HashSet<>());
+        return new Pair<>(defaultOption, blockOptions);
     }
 
     public boolean addOptionToBlock(String blockName, String option) {
         addToIndex(blocks, blockName);
 
-        Set<String> options = blocks.getStringSet(getOptionsName(blockName), new HashSet<String>());
+        Set<String> options = blocks.getStringSet(getOptionsName(blockName), new HashSet<>());
         options.add(option);
 
         Editor editor = blocks.edit();
@@ -94,18 +94,18 @@ public class DataStore {
 
     private void initializeRequests() {
         if (!requests.contains("index")) {
-            putIndex(requests, new HashSet<String>());
+            putIndex(requests, new HashSet<>());
         }
     }
 
     private void initializeBlocks() {
         if (!blocks.contains("index")) {
-            putIndex(blocks, new HashSet<String>());
+            putIndex(blocks, new HashSet<>());
         }
     }
 
     private Set<String> getIndex(SharedPreferences prefs) {
-        return prefs.getStringSet("index", new HashSet<String>());
+        return prefs.getStringSet("index", new HashSet<>());
     }
 
     private void addToIndex(SharedPreferences prefs, String item) {
@@ -121,7 +121,7 @@ public class DataStore {
     }
 
     private void putIndex(SharedPreferences prefs, Set<String> index) {
-        index = new HashSet<String>(index); //necessary because of vagaries of Set and SharedPrefs
+        index = new HashSet<>(index); //necessary because of vagaries of Set and SharedPrefs
         Editor editor = prefs.edit();
         editor.putString("history", new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date()));
         editor.putStringSet("index", index);

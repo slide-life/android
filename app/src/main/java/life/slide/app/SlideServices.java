@@ -7,6 +7,7 @@ import android.telephony.TelephonyManager;
 import android.util.Base64;
 import android.util.Log;
 
+import android.webkit.WebView;
 import com.google.common.util.concurrent.*;
 
 import org.apache.http.*;
@@ -56,6 +57,8 @@ public class SlideServices {
     private static final String EXISTS_PATH = "exists/";
     private static final String CHANNEL_PATH = "channels/";
 
+    private static int htmloutCount = 0;
+
     private static String phoneNumber = "";
 
     public static String getPhoneNumber(Context context) {
@@ -83,6 +86,23 @@ public class SlideServices {
     public static String getChannelPath(String channelId) {
         return getRootPath() + CHANNEL_PATH + channelId; }
 
+    public static String readResource(Context context, int resourceId) throws IOException {
+        InputStream inputStream = context.getResources().openRawResource(resourceId);
+        byte[] reader = new byte[inputStream.available()];
+        while (inputStream.read(reader) != -1);
+
+        return new String(reader);
+    }
+
+    public static interface OnJavascriptEvalListener { public void callback(String jsResult); }
+    public static void javascriptEval(WebView webView, String javascript, OnJavascriptEvalListener listener) {
+        htmloutCount++;
+        String htmloutId = "HTMLOUT" + htmloutCount;
+        webView.addJavascriptInterface(listener, htmloutId);
+        webView.loadUrl("javascript:( function() { var __result = " + javascript +
+                "; window." + htmloutId + ".callback(__result); } ) ()");
+    }
+
     public static ListeningExecutorService newExecutorService() {
         return MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(1));
     }
@@ -91,21 +111,17 @@ public class SlideServices {
             final ListeningExecutorService ex, Context context) {
         ListenableFuture<HttpResponse> blockResponse = getRequest(ex, getBlocksPath());
 
-        AsyncFunction<HttpResponse, ArrayList<BlockItem>> getBlockItems =
-                new AsyncFunction<HttpResponse, ArrayList<BlockItem>>() {
-                    @Override
-                    public ListenableFuture<ArrayList<BlockItem>> apply(HttpResponse input) throws Exception {
-                        //get json
-                        JSONArray array = jsonArrayFromResponse(input);
-                        //create blocks through json
-                        ArrayList<BlockItem> blocks = new ArrayList<BlockItem>();
-                        for (int i = 0; i < array.length(); i++) {
-                            blocks.add(new BlockItem(array.getJSONObject(i)));
-                        }
+        AsyncFunction<HttpResponse, ArrayList<BlockItem>> getBlockItems = (input) -> {
+            //get json
+            JSONArray array = jsonArrayFromResponse(input);
+            //create blocks through json
+            ArrayList<BlockItem> blocks = new ArrayList<BlockItem>();
+            for (int i = 0; i < array.length(); i++) {
+                blocks.add(new BlockItem(array.getJSONObject(i)));
+            }
 
-                        return returnListenableFuture(ex, blocks);
-                    }
-                };
+            return returnListenableFuture(ex, blocks);
+        };
         ListenableFuture<ArrayList<BlockItem>> total = Futures.transform(blockResponse, getBlockItems, ex);
         return total;
     }
@@ -145,22 +161,14 @@ public class SlideServices {
     public static ListenableFuture<Boolean> processRegistrationId(
             final ListeningExecutorService ex, final Context context, final String regId) {
         ListenableFuture<Boolean> userExists = getUserExists(ex, context);
-        AsyncFunction<Boolean, Boolean> submitUser = //fucking monad chaining in Java takes 5 lines
-                new AsyncFunction<Boolean, Boolean>() {
-                    @Override
-                    public ListenableFuture<Boolean> apply(Boolean input) {
-                        if (!input) return postUser(ex, context);
-                        return returnListenableFuture(ex, true);
-                    }
-                };
-        AsyncFunction<Boolean, Boolean> submitRegId =
-                new AsyncFunction<Boolean, Boolean>() {
-                    @Override
-                    public ListenableFuture<Boolean> apply(Boolean input) throws Exception {
-                        if (input) return postRegistrationId(ex, context, regId);
-                        return returnListenableFuture(ex, true);
-                    }
-                };
+        AsyncFunction<Boolean, Boolean> submitUser = (input) -> {
+            if (!input) return postUser(ex, context);
+            return returnListenableFuture(ex, true);
+        };
+        AsyncFunction<Boolean, Boolean> submitRegId = (input) -> {
+            if (input) return postRegistrationId(ex, context, regId);
+            return returnListenableFuture(ex, true);
+        };
 
         ListenableFuture<Boolean> total = Futures.transform(userExists, submitUser, ex);
         total = Futures.transform(total, submitRegId, ex);
@@ -168,53 +176,15 @@ public class SlideServices {
     }
 
     public static ListenableFuture<Boolean> postData(
-            final ListeningExecutorService ex, Map<String, String> fields, Request request) {
-        JSONObject data = new JSONObject();
-        JSONObject fieldsObject = new JSONObject();
-        try {
-            for (String k : fields.keySet())
-                fieldsObject.put(k, fields.get(k));
-            data.put("fields", fieldsObject);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-        Log.i(TAG, "Encoded fields JSON: " + data.toString());
-
-        ListenableFuture<Boolean> result = postBooleanValue(ex, getChannelPath(request.channelId), data);
+            final ListeningExecutorService ex, JSONObject fields, Request request) {
+        Log.i(TAG, "Encoded fields JSON: " + fields.toString());
+        ListenableFuture<Boolean> result = postBooleanValue(ex, getChannelPath(request.channelId), fields);
         return result;
-    }
-
-    public static Map<String, String> encrypt(Map<String, String> fields, String pem) {
-        Map<String, String> ret = new HashMap<String, String>();
-
-        PublicKey publicKey = publicKeyFromString(pem);
-        try {
-            Cipher cipher = Cipher.getInstance("RSA");
-            cipher.init(Cipher.ENCRYPT_MODE, publicKey);
-
-            for (String key : fields.keySet()) {
-                String item = fields.get(key);
-                byte[] cipherData = cipher.doFinal(item.getBytes());
-                String encodedItem = Base64.encodeToString(cipherData, Base64.DEFAULT);
-                ret.put(key, encodedItem);
-            }
-
-            return ret;
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        return null;
     }
 
     private static <T> ListenableFuture<T> returnListenableFuture(
             ListeningExecutorService service, final T value) {
-        return service.submit(new Callable<T>() {
-            @Override
-            public T call() {
-                return value;
-            }
-        });
+        return service.submit(() -> value);
     }
 
     private static String jsonFromResponse(HttpResponse response) {
@@ -289,33 +259,25 @@ public class SlideServices {
 
     private static AsyncFunction<HttpResponse, Boolean> responseFutureToBoolean(
             final ListeningExecutorService ex) {
-        return new AsyncFunction<HttpResponse, Boolean>() {
-            @Override
-            public ListenableFuture<Boolean> apply(HttpResponse input) throws Exception {
-                return returnListenableFuture(ex, booleanFromResponse(input));
-            }
-        };
+        return (input) -> returnListenableFuture(ex, booleanFromResponse(input));
     }
 
     private static ListenableFuture<HttpResponse> response(
             final ListeningExecutorService ex, final HttpUriRequest uriRequest) {
-        return ex.submit(new Callable<HttpResponse>() {
-            @Override
-            public HttpResponse call() throws Exception {
-                Log.i(TAG, "Response being sent... " + uriRequest.getMethod()
-                        + "->" + uriRequest.getURI().toString() + " : " + uriRequest.getParams().toString());
+        return ex.submit(() -> {
+            Log.i(TAG, "Response being sent... " + uriRequest.getMethod()
+                    + "->" + uriRequest.getURI().toString() + " : " + uriRequest.getParams().toString());
 
-                HttpClient client = new DefaultHttpClient();
-                HttpResponse response = null;
+            HttpClient client = new DefaultHttpClient();
+            HttpResponse response = null;
 
-                try {
-                    response = client.execute(uriRequest);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-
-                return response;
+            try {
+                response = client.execute(uriRequest);
+            } catch (IOException e) {
+                e.printStackTrace();
             }
+
+            return response;
         });
     }
 
@@ -330,15 +292,6 @@ public class SlideServices {
             final ListeningExecutorService ex, final String url, final JSONObject data) {
         HttpPost httpPost = new HttpPost(url);
         try {
-            ArrayList<NameValuePair> postParameters = new ArrayList<NameValuePair>();
-
-            /*
-            Iterator<String> keys = data.keys();
-            while (keys.hasNext()) {
-                String key = keys.next();
-                postParameters.add(new BasicNameValuePair(key, data.getString(key)));
-            }
-            httpPost.setEntity(new UrlEncodedFormEntity(postParameters)); */ //form mode
             StringEntity se = new StringEntity(data.toString());
             se.setContentEncoding(new BasicHeader(HTTP.CONTENT_TYPE, "application/json"));
             httpPost.setEntity(se);
@@ -367,29 +320,5 @@ public class SlideServices {
         ListenableFuture<Boolean> result = Futures.transform(response, responseToBoolean);
 
         return result;
-    }
-
-    private static PublicKey publicKeyFromString(String pem) {
-        pem = new String(Base64.decode(pem.getBytes(), Base64.DEFAULT)); //get raw pem
-        Log.i(TAG, "Pem obtained: " + pem);
-
-        String finalPem = pem.
-                replace("-----BEGIN PUBLIC KEY-----", "").
-                replace("-----END PUBLIC KEY-----", "").
-                replaceAll("\\s+", "");
-        Log.i(TAG, "Base64: " + finalPem);
-
-        byte[] decoded = Base64.decode(finalPem, Base64.DEFAULT);
-        X509EncodedKeySpec spec = new X509EncodedKeySpec(decoded);
-        KeyFactory kf;
-
-        try {
-            kf = KeyFactory.getInstance("RSA");
-            return kf.generatePublic(spec);
-        } catch (Exception nsa) {
-            nsa.printStackTrace();
-        }
-
-        return null;
     }
 }

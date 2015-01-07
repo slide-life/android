@@ -181,46 +181,43 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
         Log.i(TAG, "Getting GCM instance...");
         gcm = (gcm != null) ? gcm : GoogleCloudMessaging.getInstance(this);
 
-        Runnable task = new Runnable() {
-            @Override
-            public void run() {
-                int attemptsAllowed = 5;
-                int attempts = 0;
-                boolean stopFetching = false;
+        Runnable task = () -> {
+            int attemptsAllowed = 5;
+            int attempts = 0;
+            boolean stopFetching = false;
 
-                while (!stopFetching) {
-                    attempts++;
+            while (!stopFetching) {
+                attempts++;
 
+                try {
+                    regId = gcm.register(SENDER_ID);
+                    Log.i(TAG, "Device registered, regId=" + regId);
                     try {
-                        regId = gcm.register(SENDER_ID);
-                        Log.i(TAG, "Device registered, regId=" + regId);
-                        try {
-                            Thread.sleep(2000);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-
-                    } catch (IOException e) {
-                        Log.i(TAG, "IOException: " + e.getMessage());
+                        Thread.sleep(2000);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
                     }
 
-                    if (!regId.isEmpty()) {
-                        if (attempts > attemptsAllowed) stopFetching = true;
-                        else {
-                            ListeningExecutorService service = SlideServices.newExecutorService();
-                            ListenableFuture<Boolean> f = sendRegistrationIdToBackend(service);
-                            Futures.addCallback(f, new FutureCallback<Boolean>() {
-                                @Override
-                                public void onSuccess(Boolean result) {
-                                    if (result) storeRegistrationId();
-                                }
+                } catch (IOException e) {
+                    Log.i(TAG, "IOException: " + e.getMessage());
+                }
 
-                                @Override
-                                public void onFailure(Throwable t) {
-                                    Log.i(TAG, "Failure: " + t.getMessage());
-                                }
-                            });
-                        }
+                if (!regId.isEmpty()) {
+                    if (attempts > attemptsAllowed) stopFetching = true;
+                    else {
+                        ListeningExecutorService service = SlideServices.newExecutorService();
+                        ListenableFuture<Boolean> f = sendRegistrationIdToBackend(service);
+                        Futures.addCallback(f, new FutureCallback<Boolean>() {
+                            @Override
+                            public void onSuccess(Boolean result) {
+                                if (result) storeRegistrationId();
+                            }
+
+                            @Override
+                            public void onFailure(Throwable t) {
+                                Log.i(TAG, "Failure: " + t.getMessage());
+                            }
+                        });
                     }
                 }
             }

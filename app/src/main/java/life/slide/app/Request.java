@@ -36,7 +36,7 @@ public class Request {
             JSONObject object = new JSONObject(json);
 
             JSONArray blocksJson = object.getJSONArray(BLOCKS);
-            ArrayList<String> retBlocks = new ArrayList<String>();
+            ArrayList<String> retBlocks = new ArrayList<>();
             for (int i = 0; i < blocksJson.length(); i++)
                 retBlocks.add(blocksJson.getString(i)); //TODO: replace with getObject
 

@@ -40,13 +40,10 @@ public class QRFragment extends Fragment {
         dataStore = DataStore.getSingletonInstance(getActivity());
 
         scanButton = (Button) rootView.findViewById(R.id.scanButton);
-        scanButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent intent = new Intent("com.google.zxing.client.android.SCAN");
-                intent.putExtra("SCAN_MODE", "QR_CODE_MODE");
-                startActivityForResult(intent, 0);
-            }
+        scanButton.setOnClickListener((view) -> {
+            Intent intent = new Intent("com.google.zxing.client.android.SCAN");
+            intent.putExtra("SCAN_MODE", "QR_CODE_MODE");
+            startActivityForResult(intent, 0);
         });
 
         return rootView;

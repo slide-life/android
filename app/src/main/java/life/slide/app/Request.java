@@ -10,21 +10,22 @@ import java.util.ArrayList;
  * Created by Michael on 12/22/2014.
  */
 public class Request {
-    private final String CHANNEL_ID = "id"; //TODO: update the SharedPrefs xml in the tests
+    private final String CONVERSATION = "conversation";
+    private final String CONVERSATION_ID = "id"; //TODO: update the SharedPrefs xml in the tests
     private final String NAME = "name";
     private final String DESCRIPTION = "description";
     private final String BLOCKS = "blocks";
     private final String PUBLIC_KEY = "key";
 
-    public String channelId;
+    public String conversationId; //actually conversation id
     public String name;
     public String description;
     public ArrayList<String> blocks;
     public String pubKey;
 
-    public Request(String channelId, String name, String description,
+    public Request(String conversationId, String name, String description,
                    ArrayList<String> blocks, String pubKey) {
-        this.channelId = channelId;
+        this.conversationId = conversationId;
         this.name = name;
         this.description = description;
         this.blocks = blocks;
@@ -40,11 +41,13 @@ public class Request {
             for (int i = 0; i < blocksJson.length(); i++)
                 retBlocks.add(blocksJson.getString(i)); //TODO: replace with getObject
 
-            this.channelId = object.getString(CHANNEL_ID);
-            this.name = object.getString(NAME);
-            this.description = object.getString(DESCRIPTION);
+            JSONObject conversationJson = object.getJSONObject(CONVERSATION);
+
+            this.conversationId = conversationJson.getString(CONVERSATION_ID);
+            this.name = conversationJson.getString(NAME);
+            this.description = conversationJson.getString(DESCRIPTION);
             this.blocks = retBlocks;
-            this.pubKey = object.getString(PUBLIC_KEY);
+            this.pubKey = conversationJson.getString(PUBLIC_KEY);
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -58,10 +61,12 @@ public class Request {
     public String toJson() {
         JSONObject object = new JSONObject();
         try {
-            object.put(CHANNEL_ID, channelId);
-            object.put(NAME, name);
-            object.put(DESCRIPTION, description);
-            object.put(PUBLIC_KEY, pubKey);
+            JSONObject conversationJson = new JSONObject();
+            conversationJson.put(CONVERSATION_ID, conversationId);
+            conversationJson.put(NAME, name);
+            conversationJson.put(DESCRIPTION, description);
+            conversationJson.put(PUBLIC_KEY, pubKey);
+            object.put(CONVERSATION, conversationJson);
 
             JSONArray blocksJson = new JSONArray(blocks);
             object.put(BLOCKS, blocksJson);

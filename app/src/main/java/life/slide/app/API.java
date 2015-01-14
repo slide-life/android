@@ -1,63 +1,44 @@
 package life.slide.app;
 
 import android.content.Context;
-import android.os.AsyncTask;
-import android.sax.TextElementListener;
 import android.telephony.TelephonyManager;
-import android.util.Base64;
 import android.util.Log;
 
-import android.webkit.WebView;
 import com.google.common.util.concurrent.*;
 
 import org.apache.http.*;
-import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.HttpClient;
-import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpPut;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.message.BasicHeader;
-import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.protocol.HTTP;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import javax.crypto.Cipher;
-import javax.crypto.NoSuchPaddingException;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.security.KeyFactory;
-import java.security.NoSuchAlgorithmException;
-import java.security.PublicKey;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
 import java.util.concurrent.*;
-import java.util.jar.Attributes;
 
 /**
  * Created by Michael on 12/22/2014.
  */
-public class SlideServices {
-    private static final String TAG = "Slide -> SlideServices";
-
+public class API {
+    private static final String TAG = "Slide -> API";
     private static final String HOSTNAME = "api-sandbox.slide.life";
     private static final String PORT = "";
     private static final String BLOCKS_PATH = "blocks/";
     private static final String USER_PATH = "users/";
     private static final String NEW_DEVICE_PATH = "new_device/";
     private static final String EXISTS_PATH = "exists/";
-    private static final String CHANNEL_PATH = "channels/";
-
-    private static int htmloutCount = 0;
+    private static final String CONVERSATION_PATH = "conversations/";
 
     private static String phoneNumber = "";
 
@@ -83,8 +64,8 @@ public class SlideServices {
         return getUserPath(context) + NEW_DEVICE_PATH; }
     public static String getExistsPath(Context context) {
         return getUserPath(context) + EXISTS_PATH; }
-    public static String getChannelPath(String channelId) {
-        return getRootPath() + CHANNEL_PATH + channelId; }
+    public static String getConversationPath(String conversationId) {
+        return getRootPath() + CONVERSATION_PATH + conversationId; }
 
     public static String readResource(Context context, int resourceId) throws IOException {
         InputStream inputStream = context.getResources().openRawResource(resourceId);
@@ -92,15 +73,6 @@ public class SlideServices {
         while (inputStream.read(reader) != -1);
 
         return new String(reader);
-    }
-
-    public static interface OnJavascriptEvalListener { public void callback(String jsResult); }
-    public static void javascriptEval(WebView webView, String javascript, OnJavascriptEvalListener listener) {
-        htmloutCount++;
-        String htmloutId = "HTMLOUT" + htmloutCount;
-        webView.addJavascriptInterface(listener, htmloutId);
-        webView.loadUrl("javascript:( function() { var __result = " + javascript +
-                "; window." + htmloutId + ".callback(__result); } ) ()");
     }
 
     public static ListeningExecutorService newExecutorService() {
@@ -178,7 +150,7 @@ public class SlideServices {
     public static ListenableFuture<Boolean> postData(
             final ListeningExecutorService ex, JSONObject fields, Request request) {
         Log.i(TAG, "Encoded fields JSON: " + fields.toString());
-        ListenableFuture<Boolean> result = postBooleanValue(ex, getChannelPath(request.channelId), fields);
+        ListenableFuture<Boolean> result = putBooleanValue(ex, getConversationPath(request.conversationId), fields);
         return result;
     }
 
@@ -302,23 +274,42 @@ public class SlideServices {
         return response(ex, httpPost);
     }
 
+    private static ListenableFuture<HttpResponse> putRequest(
+            final ListeningExecutorService ex, final String url, final JSONObject data) {
+        HttpPut httpPut = new HttpPut(url);
+        try {
+            StringEntity se = new StringEntity(data.toString());
+            se.setContentEncoding(new BasicHeader(HTTP.CONTENT_TYPE, "application/json"));
+            httpPut.setEntity(se);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return response(ex, httpPut);
+    }
+
+    private static ListenableFuture<Boolean> booleanValue(
+            final ListeningExecutorService ex, ListenableFuture<HttpResponse> response) {
+        AsyncFunction<HttpResponse, Boolean> responseToBoolean = responseFutureToBoolean(ex);
+        ListenableFuture<Boolean> result = Futures.transform(response, responseToBoolean);
+        return result;
+    }
+
     private static ListenableFuture<Boolean> getBooleanValue(
             final ListeningExecutorService ex, final String url) {
         ListenableFuture<HttpResponse> response = getRequest(ex, url);
-
-        AsyncFunction<HttpResponse, Boolean> responseToBoolean = responseFutureToBoolean(ex);
-        ListenableFuture<Boolean> result = Futures.transform(response, responseToBoolean);
-
-        return result;
+        return booleanValue(ex, response);
     }
 
     private static ListenableFuture<Boolean> postBooleanValue(
             final ListeningExecutorService ex, final String url, final JSONObject data) {
         ListenableFuture<HttpResponse> response = postRequest(ex, url, data);
+        return booleanValue(ex, response);
+    }
 
-        AsyncFunction<HttpResponse, Boolean> responseToBoolean = responseFutureToBoolean(ex);
-        ListenableFuture<Boolean> result = Futures.transform(response, responseToBoolean);
-
-        return result;
+    private static ListenableFuture<Boolean> putBooleanValue(
+            final ListeningExecutorService ex, final String url, final JSONObject data) {
+        ListenableFuture<HttpResponse> response = putRequest(ex, url, data);
+        return booleanValue(ex, response);
     }
 }

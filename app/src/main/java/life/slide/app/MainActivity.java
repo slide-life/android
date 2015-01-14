@@ -17,6 +17,7 @@ import android.support.v4.view.ViewPager;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.webkit.WebView;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GooglePlayServicesUtil;
 import com.google.android.gms.gcm.GoogleCloudMessaging;
@@ -24,6 +25,8 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 
 public class MainActivity extends ActionBarActivity implements ActionBar.TabListener {
@@ -70,6 +73,8 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
         }
 
         //TODO: download all the blocks first
+
+        initializeKeypair();
 
         prefs = getGCMPreferences();
         if (checkPlayServices()) {
@@ -147,6 +152,26 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
         }
     }
 
+    private void initializeKeypair() {
+        DataStore data = DataStore.getSingletonInstance(this);
+        String privateKey = data.getPrivateKey();
+        if (privateKey.equals("")) {
+            WebView webView = new WebView(this);
+            Javascript.generateKeys(webView, (keys) -> {
+                try {
+                    JSONObject keypair = new JSONObject(keys);
+                    String privKey = keypair.getString("privateKey");
+                    String pubKey = keypair.getString("publicKey");
+                    data.setPrivateKey(privKey);
+                    data.setPublicKey(pubKey);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            });
+        }
+
+    }
+
     private String getRegistrationId() {
         String registrationId = prefs.getString(PROPERTY_REG_ID, "");
         if (registrationId.isEmpty()) {
@@ -205,7 +230,7 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
                 if (!regId.isEmpty()) {
                     if (attempts > attemptsAllowed) stopFetching = true;
                     else {
-                        ListeningExecutorService service = SlideServices.newExecutorService();
+                        ListeningExecutorService service = API.newExecutorService();
                         ListenableFuture<Boolean> f = sendRegistrationIdToBackend(service);
                         Futures.addCallback(f, new FutureCallback<Boolean>() {
                             @Override
@@ -227,7 +252,7 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
 
     private ListenableFuture<Boolean> sendRegistrationIdToBackend(
             ListeningExecutorService service) {
-        return SlideServices.processRegistrationId(service, this, regId);
+        return API.processRegistrationId(service, this, regId);
     }
 
     private void storeRegistrationId() {

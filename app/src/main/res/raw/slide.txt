@@ -28531,9 +28531,10 @@ var Channel = require("./slide/channel")["default"];
 $('body').append('<div class="modal fade" id="modal" tabindex="-1" role="dialog" aria-labelledby="modal-label" aria-hidden="true"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button><h4 class="modal-title text-center" id="modal-label">slide</h4></div><div class="modal-body"></div></div></div></div>');
 
 window.Slide = {
-  host: 'api-sandbox.slide.life',
+  host: 'slide-dev.ngrok.com',
 
   crypto: new Crypto(),
+  Channel: Channel,
 
   extractBlocks: function (form) {
     return form.find('*').map(function () {
@@ -28542,32 +28543,12 @@ window.Slide = {
   },
 
   populateFields: function (form, fields, sec) {
-    var data = Slide.crypto.decryptData(fields, sec);
     form.find('*').each(function () {
       var field = $(this).attr('data-slide');
-      if (!!field && data[field]) {
-        $(this).val(data[field]);
+      if (!!field && fields[field]) {
+        $(this).val(fields[field]);
       }
     });
-  },
-
-  createChannelFromForm: function (form, cb) {
-    var blocks = this.extractBlocks(form);
-    var channel = new Channel(blocks);
-    channel.create({
-      onCreate: cb,
-      listen: function(x) {
-        channel.listeners.forEach(function(l) {
-          l(x);
-        });
-        channel.frame.remove();
-        $("#modal").modal("toggle");
-      }
-    });
-    channel.listeners = [];
-    channel.observe = function(cb) {
-      this.listeners.push(cb);
-    };
   },
 
   getBlocks: function (cb) {
@@ -28577,9 +28558,7 @@ window.Slide = {
       contentType: 'application/json',
       success: cb
     });
-  },
-
-  Channel: Channel
+  }
 };
 },{"./slide/channel":2,"./slide/crypto":3}],2:[function(require,module,exports){
 "use strict";
@@ -28599,7 +28578,7 @@ Channel.fromObject = function (object) {
   return channel;
 };
 
-Channel.prototype.toObject = function() {
+Channel.prototype.toObject = function () {
   var channel = this;
   var object = {};
   for (var key in channel) {
@@ -28611,29 +28590,41 @@ Channel.prototype.toObject = function() {
   return object;
 };
 
-Channel.prototype.create = function (cb) {
-  var self = this;
-  Slide.crypto.generateKeys(function (keys) {
-      self.publicKey = keys.publicKey;
-      self.privateKey = keys.privateKey;
-      var pem = forge.util.encode64(forge.pki.publicKeyToPem(self.publicKey));
-      $.ajax({
-        type: 'POST',
-        url: 'http://' + Slide.host + '/channels',
-        contentType: 'application/json',
-        data: JSON.stringify({
-          key: forge.util.encode64(forge.pki.publicKeyToPem(self.publicKey)),
-          blocks: self.blocks
-        }),
-        success: function (data) {
-          self.id = data.id;
+Channel.prototype.prompt = function(cb) {
+  var form = $("<form><input type='text'><input type='submit' value='Send'></form>");
+  $('#modal .modal-body').append(form);
+  form.submit(function(evt) {
+    evt.preventDefault();
+    var number = $(this).find("[type=text]").val();
+    $.get("http://" + Slide.host + "/users/" + number + "/public_key", function(resp) {
+      var key = resp.public_key;
+      cb(number, key);
+    });
+  });
+  $("#modal").modal('toggle');
+};
 
-          if (!!cb) {
-            cb(self, keys)
-          }
-        }
+Channel.prototype.create = function (number, key, cb) {
+  var self = this;
+  self.aes = Slide.crypto.AES.generateKey();
+  var encryptedKey = Slide.crypto.encryptStringWithPackedKey(self.aes, key)
+  $.ajax({
+    type: 'POST',
+    url: 'http://' + Slide.host + '/channels',
+    contentType: 'application/json',
+    data: JSON.stringify({
+      key: encryptedKey,
+      blocks: self.blocks,
+      number: number
+    }),
+    success: function (data) {
+      self.id = data.id;
+      self.listen(function (fields) {
+        $('#modal').modal('toggle');
+        cb && cb(fields);
       });
-  }, null, this);
+    }
+  });
 }
 
 Channel.prototype.getWSURL = function () {
@@ -28648,56 +28639,14 @@ Channel.prototype.getQRCodeURL = function () {
   return this.getURL() + '/qr';
 };
 
-Channel.prototype.updateState = function (state, cb) {
-  $.ajax({
-    type: 'PUT',
-    url: this.getURL(),
-    contentType: 'application/json',
-    data: JSON.stringify({
-      open: state
-    }),
-    success: cb
-  });
-};
-
-Channel.prototype.open = function (cb) {
-  this.updateState(true, cb);
-};
-
-Channel.prototype.close = function (cb) {
-  this.updateState(false, cb);
-};
-
 Channel.prototype.listen = function (cb) {
   var socket = new WebSocket(this.getWSURL());
   var self = this;
   socket.onmessage = function (event) {
-    cb(Slide.crypto.decryptData(JSON.parse(event.data).fields, self.privateKey));
+    var data = JSON.parse(event.data).fields;
+    console.log(data, self.aes);
+    cb(Slide.crypto.AES.decryptData(data, self.aes));
   };
-};
-
-Channel.prototype.prompt = function (cb) {
-  var bucketPrompt = !cb;
-  var self = this;
-  var listeners = {
-    onCreate: function () {
-      self.frame = $('<iframe/>', {
-        src: 'frames/prompt.html?channel=' + self.id,
-        id: 'slide-bucket-frame'
-      });
-      $('#modal .modal-body').append(self.frame);
-      $('#modal').modal('toggle');
-    },
-    listen: function (data) {
-      $('#modal').modal('toggle');
-      self.frame.remove();
-      cb && cb(data.fields);
-    }
-  };
-  if (bucketPrompt) {
-    listeners.onCreate();
-  }
-  else this.create(listeners);
 };
 
 Channel.prototype.getResponses = function(cb) {
@@ -28725,6 +28674,76 @@ exports["default"] = function () {
     cb(rsa.generateKeyPair({ bits: 512, e: 0x10001 }));
   };
 
+  this.packPublicKey = function(key) {
+    return btoa(forge.pki.publicKeyToPem(key));
+  };
+  this.packPrivateKey = function(key) {
+    return btoa(forge.pki.privateKeyToPem(key));
+  };
+  this.packKeys = function(keys) {
+    return {
+      publicKey: this.packPublicKey(keys.publicKey),
+      privateKey: this.packPrivateKey(keys.privateKey)
+    };
+  };
+
+  this.AES = {
+    generateCipher: function() {
+      return {
+        key: forge.random.getBytesSync(16),
+        iv: forge.random.getBytesSync(16)
+      };
+    },
+    _packCipher: function(cipher) {
+      var cipher = this.generateCipher();
+      return btoa(cipher.key+cipher.iv);
+    },
+    _unpackCipher: function(packed) {
+      var decoded = atob(packed),
+          key = decoded.substr(0, 16),
+          iv = decoded.substr(16);
+      return {key:key,iv:iv};
+    },
+    generateKey: function() {
+      return this._packCipher(this.generateCipher());
+    },
+    encrypt: function(payload, key) {
+      var unpacked = this._unpackCipher(key),
+          key = unpacked.key,
+          iv = unpacked.iv;
+      var cipher = forge.cipher.createCipher('AES-CBC', key);
+      cipher.start({iv: iv});
+      cipher.update(forge.util.createBuffer(payload));
+      cipher.finish();
+      return cipher.output.toHex();
+    },
+    decrypt: function(hex, key) {
+      var unpacked = this._unpackCipher(key),
+          key = unpacked.key,
+          iv = unpacked.iv;
+      var decipher = forge.cipher.createDecipher('AES-CBC', key);
+      decipher.start({iv: iv});
+      var payload = new forge.util.ByteStringBuffer(forge.util.hexToBytes(hex));
+      decipher.update(payload);
+      decipher.finish();
+      return decipher.output.data;
+    },
+    decryptData: function(data, key) {
+      var clean = {};
+      for( var k in data ) {
+        clean[k] = this.decrypt(atob(data[k]), key);
+      }
+      return clean;
+    },
+    encryptData: function(data, key) {
+      var encrypted = {};
+      for( var k in data ) {
+        encrypted[k] = btoa(this.encrypt(data[k], key));
+      }
+      return encrypted;
+    }
+  };
+
   this.decryptString = function(text, sec) {
     return sec.decrypt(text);
   };
@@ -28732,7 +28751,7 @@ exports["default"] = function () {
   this.decryptData = function(data, sec) {
     var clean = {};
     for( var key in data ) {
-      clean[key] = this.decryptString(forge.util.decode64(data[key]), sec);
+      clean[key] = this.decryptString(atob(data[key]), sec);
     }
     return clean;
   };
@@ -28744,7 +28763,7 @@ exports["default"] = function () {
   this.encryptDataWithKey = function(data, pub) {
     var encrypted = {};
     for( var key in data ) {
-      encrypted[key] = forge.util.encode64(this.encryptString(data[key], pub));
+      encrypted[key] = btoa(this.encryptString(data[key], pub));
     }
     return encrypted;
   };
@@ -28752,6 +28771,17 @@ exports["default"] = function () {
   this.encryptData = function(data, pem) {
     var pub = forge.pki.publicKeyFromPem(pem);
     return this.encryptDataWithKey(data, pub);
+  };
+
+  this.encryptStringWithPackedKey = function(text, key) {
+    console.log(text);
+    var pub = forge.pki.publicKeyFromPem(atob(key));
+    return btoa(pub.encrypt(text));
+  };
+
+  this.decryptStringWithPackedKey = function(text, key) {
+    var pub = forge.pki.privateKeyFromPem(atob(key));
+    return pub.decrypt(atob(text));
   };
 };
 },{}]},{},[1])

@@ -21,11 +21,17 @@ public class DataStore {
     private static DataStore singletonInstance;
 
     private final String TAG = "Slide -> DataStore";
+
+    private final String INDEX = "index";
+    private final String PRIVATE_KEY = "private_key";
+    private final String PUBLIC_KEY = "public_key";
+
     private final String BLOCK_STORAGE_FILE = "blocks";
     private final String REQUEST_STORAGE_FILE = "requests";
+    private final String PRIVATE_KEY_FILE = "private_key";
 
     public Context context;
-    public SharedPreferences blocks, requests;
+    public SharedPreferences blocks, requests, privateKey;
 
     public static DataStore getSingletonInstance() {
         return DataStore.singletonInstance; //not safe
@@ -43,8 +49,29 @@ public class DataStore {
         this.context = context;
         this.blocks = context.getSharedPreferences(BLOCK_STORAGE_FILE, Context.MODE_PRIVATE);
         this.requests = context.getSharedPreferences(REQUEST_STORAGE_FILE, Context.MODE_PRIVATE);
+        this.privateKey = context.getSharedPreferences(PRIVATE_KEY_FILE, Context.MODE_PRIVATE);
         initializeRequests();
         initializeBlocks();
+    }
+
+    public void setPrivateKey(String s) {
+        Editor editor = privateKey.edit();
+        editor.putString(PRIVATE_KEY, s);
+        editor.commit();
+    }
+
+    public void setPublicKey(String s) {
+        Editor editor = privateKey.edit();
+        editor.putString(PUBLIC_KEY, s);
+        editor.commit();
+    }
+
+    public String getPrivateKey() {
+        return privateKey.getString(PRIVATE_KEY, "");
+    }
+
+    public String getPublicKey() {
+        return privateKey.getString(PUBLIC_KEY, "");
     }
 
     public void insertRequest(Request request) {
@@ -93,19 +120,19 @@ public class DataStore {
     }
 
     private void initializeRequests() {
-        if (!requests.contains("index")) {
+        if (!requests.contains(INDEX)) {
             putIndex(requests, new HashSet<>());
         }
     }
 
     private void initializeBlocks() {
-        if (!blocks.contains("index")) {
+        if (!blocks.contains(INDEX)) {
             putIndex(blocks, new HashSet<>());
         }
     }
 
     private Set<String> getIndex(SharedPreferences prefs) {
-        return prefs.getStringSet("index", new HashSet<>());
+        return prefs.getStringSet(INDEX, new HashSet<>());
     }
 
     private void addToIndex(SharedPreferences prefs, String item) {
@@ -124,7 +151,7 @@ public class DataStore {
         index = new HashSet<>(index); //necessary because of vagaries of Set and SharedPrefs
         Editor editor = prefs.edit();
         editor.putString("history", new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date()));
-        editor.putStringSet("index", index);
+        editor.putStringSet(INDEX, index);
         editor.commit();
     }
 

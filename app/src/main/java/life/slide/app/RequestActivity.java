@@ -1,33 +1,21 @@
 package life.slide.app;
 
 import android.app.ActionBar;
-import android.content.Context;
 import android.content.Intent;
-import android.graphics.Picture;
 import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
 import android.text.TextUtils;
-import android.transition.Slide;
 import android.util.Log;
-import android.util.Pair;
 import android.view.*;
-import android.view.inputmethod.InputMethodManager;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.*;
-import android.widget.LinearLayout.LayoutParams;
-import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
 
 public class RequestActivity extends ActionBarActivity {
     private static final String TAG = "Slide -> RequestActivity";
@@ -52,11 +40,11 @@ public class RequestActivity extends ActionBarActivity {
         setContentView(R.layout.activity_request);
 
         try {
-            slideJs = SlideServices.readResource(this, R.raw.slide);
-            slideFormJs = SlideServices.readResource(this, R.raw.slide_form);
-            stylesCss = SlideServices.readResource(this, R.raw.styles);
-            jqueryJs = SlideServices.readResource(this, R.raw.jquery);
-            formTemplateHtml = SlideServices.readResource(this, R.raw.form_template);
+            slideJs = API.readResource(this, R.raw.slide);
+            slideFormJs = API.readResource(this, R.raw.slide_form);
+            stylesCss = API.readResource(this, R.raw.styles);
+            jqueryJs = API.readResource(this, R.raw.jquery);
+            formTemplateHtml = API.readResource(this, R.raw.form_template);
         } catch (IOException e) {
             Log.i(TAG, "IO error on reading resource.");
             e.printStackTrace();
@@ -105,10 +93,10 @@ public class RequestActivity extends ActionBarActivity {
 
     private void initializeWeb() {
         formTemplateHtml = formTemplateHtml
-                .replace("{{slide-form.js}}", slideFormJs)
-                .replace("{{jquery.js}}", jqueryJs)
-                .replace("{{styles.css}}", stylesCss)
-                .replace("{{slide.js}}", slideJs);
+                .replace("{{@slide-form.js}}", slideFormJs)
+                .replace("{{@jquery.js}}", jqueryJs)
+                .replace("{{@styles.css}}", stylesCss)
+                .replace("{{@slide.js}}", slideJs);
 
         webForm.setWebViewClient(new WebViewClient() {
             @Override
@@ -120,7 +108,7 @@ public class RequestActivity extends ActionBarActivity {
         webForm.loadDataWithBaseURL(BASE_URL, formTemplateHtml, "text/html", "UTF-8", "");
     }
 
-    private void initializeForm() {
+    private void initializeForm() { //TODO: move javascript to Javascript class
         ArrayList<String> fieldCommands = new ArrayList<>();
         for (String blockName : request.blocks) {
             Log.i(TAG, "Processing block " + blockName);
@@ -136,17 +124,17 @@ public class RequestActivity extends ActionBarActivity {
 
     private void initializeSubmit() {
         submitButton.setOnClickListener((view) -> {
-            SlideServices.javascriptEval(webForm, "Forms.serializeForm()", (serializedForm) -> {
-                String encryptedJson = "JSON.stringify({fields: Slide.crypto.encryptData(" + serializedForm +
-                        ", forge.util.decode64(" + request.pubKey + ")), blocks: []})";
-                SlideServices.javascriptEval(webForm, encryptedJson, (encryptedForm) -> {
-                    ListeningExecutorService exec = SlideServices.newExecutorService();
-                    try {
-                        SlideServices.postData(exec, new JSONObject(encryptedJson), request);
-                    } catch (JSONException e) {
-                        Log.i(TAG, "JSON exception for json: " + encryptedJson + "!");
-                        e.printStackTrace();
-                    }
+            Javascript.getResponses(webForm, (serializedForm) -> {
+                Javascript.decryptSymKey(webForm, request.pubKey, (key) -> {
+                    Javascript.encrypt(webForm, serializedForm, key, (encryptedResponses) -> {
+                        ListeningExecutorService exec = API.newExecutorService();
+                        try {
+                            API.postData(exec, new JSONObject(encryptedResponses), request);
+                        } catch (JSONException e) {
+                            Log.i(TAG, "JSON exception for json: " + encryptedResponses + "!");
+                            e.printStackTrace();
+                        }
+                    });
                 });
             });
         });

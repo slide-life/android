@@ -40,13 +40,12 @@ public class Request {
             ArrayList<String> retBlocks = new ArrayList<>();
             for (int i = 0; i < blocksJson.length(); i++)
                 retBlocks.add(blocksJson.getString(i)); //TODO: replace with getObject
+            this.blocks = retBlocks;
 
             JSONObject conversationJson = object.getJSONObject(CONVERSATION);
-
             this.conversationId = conversationJson.getString(CONVERSATION_ID);
             this.name = conversationJson.getString(NAME);
             this.description = conversationJson.getString(DESCRIPTION);
-            this.blocks = retBlocks;
             this.pubKey = conversationJson.getString(PUBLIC_KEY);
         } catch (JSONException e) {
             e.printStackTrace();

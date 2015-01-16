@@ -16,11 +16,13 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.Set;
 
 public class RequestActivity extends ActionBarActivity {
     private static final String TAG = "Slide -> RequestActivity";
 
-    private final String BASE_URL = getResources().getString(R.string.hostname);
+    private String BASE_URL;
 
     private String slideJs;
     private String slideFormJs;
@@ -38,6 +40,8 @@ public class RequestActivity extends ActionBarActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_request);
+
+        BASE_URL = getResources().getString(R.string.hostname);
 
         try {
             slideJs = API.readResource(this, R.raw.slide);
@@ -108,25 +112,49 @@ public class RequestActivity extends ActionBarActivity {
         webForm.loadDataWithBaseURL(BASE_URL, formTemplateHtml, "text/html", "UTF-8", "");
     }
 
-    private void initializeForm() { //TODO: move javascript to Javascript class
+    private void initializeForm() {
         ArrayList<String> fieldCommands = new ArrayList<>();
         for (String blockName : request.blocks) {
             Log.i(TAG, "Processing block " + blockName);
             BlockItem block = new BlockItem(blockName);
+            Set<String> options = block.getOptions().second;
+            ArrayList<String> optionsQuoted = new ArrayList<>();
+            for (String o : options) optionsQuoted.add(String.format("\"%s\"", o));
 
-            fieldCommands.add("Forms.selectField('" + blockName +
-                    "', [" + TextUtils.join(",", block.getOptions().second) + "], true)");
+            fieldCommands.add(String.format("Forms.selectField('%s', [%s], true)",
+                    blockName, TextUtils.join(",", optionsQuoted)));
         }
 
-        String addBlocksCommand = "Forms.populateForm([" + TextUtils.join(",", fieldCommands) + "]);";
-        webForm.loadUrl("javascript:" + addBlocksCommand);
+        String addBlocksCommand = String.format("Forms.populateForm([%s]);", TextUtils.join(",", fieldCommands));
+        Log.i(TAG, "JS command: " + addBlocksCommand);
+        Javascript.javascriptEval(webForm, addBlocksCommand, (x) -> {});
+    }
+
+    private void saveFormValues(String serializedForm) {
+        DataStore dataStore = DataStore.getSingletonInstance();
+        try {
+            JSONObject jsonForm = new JSONObject(serializedForm);
+            Iterator<String> jsonKeys = jsonForm.keys();
+            while (jsonKeys.hasNext()) {
+                String jsonKey = jsonKeys.next();
+                String jsonValue = jsonForm.getString(jsonKey);
+                dataStore.addOptionToBlock(jsonValue, jsonKey);
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
     }
 
     private void initializeSubmit() {
         submitButton.setOnClickListener((view) -> {
             Javascript.getResponses(webForm, (serializedForm) -> {
+                Log.i(TAG, "Serialized form: " + serializedForm);
+                saveFormValues(serializedForm);
+
                 Javascript.decryptSymKey(webForm, request.pubKey, (key) -> {
+                    Log.i(TAG, "Decrypted key: " + key);
                     Javascript.encrypt(webForm, serializedForm, key, (encryptedResponses) -> {
+                        Log.i(TAG, "Encrypted responses: " + encryptedResponses);
                         ListeningExecutorService exec = API.newExecutorService();
                         try {
                             API.postData(exec, new JSONObject(encryptedResponses), request);

@@ -11,11 +11,14 @@ public class Javascript {
     public static interface OnJavascriptEvalListener { public void callback(String jsResult); }
 
     public static void javascriptEval(WebView webView, String javascript, OnJavascriptEvalListener listener) {
+        /*
         htmloutCount++;
         String htmloutId = "HTMLOUT" + htmloutCount;
         webView.addJavascriptInterface(listener, htmloutId);
         webView.loadUrl("javascript:( function() { var __result = " + javascript +
-                "; window." + htmloutId + ".callback(__result); } ) ()");
+                "; window." + htmloutId + ".callback(__result); } ) ()");*/
+
+        webView.evaluateJavascript(javascript, listener::callback);
     }
 
     public static void javascriptStatements(WebView webView,

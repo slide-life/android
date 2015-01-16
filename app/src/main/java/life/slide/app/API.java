@@ -32,13 +32,17 @@ import java.util.concurrent.*;
  */
 public class API {
     private static final String TAG = "Slide -> API";
-    private static final String HOSTNAME = "api-sandbox.slide.life";
+    private static final String HOSTNAME = "slide-vendor-sandbox.herokuapp.com";
     private static final String PORT = "";
-    private static final String BLOCKS_PATH = "blocks/";
-    private static final String USER_PATH = "users/";
-    private static final String NEW_DEVICE_PATH = "new_device/";
-    private static final String EXISTS_PATH = "exists/";
-    private static final String CONVERSATION_PATH = "conversations/";
+
+    private static final String BLOCKS_PATH = "/blocks";
+    private static final String USER_PATH = "/users";
+    private static final String NEW_DEVICE_PATH = "/devices";
+    private static final String EXISTS_PATH = "/exists";
+    private static final String CONVERSATION_PATH = "/conversations";
+
+    private static final String REGISTRATION_ID = "registration_id";
+    private static final String TYPE = "type";
 
     private static String phoneNumber = "";
 
@@ -53,27 +57,19 @@ public class API {
     }
 
     public static String getRootPath() {
-        return "http://" + HOSTNAME + (PORT.equals("") ? "" : ":" + PORT) + "/"; }
+        return "http://" + HOSTNAME + (PORT.equals("") ? "" : ":" + PORT); }
     public static String getBlocksPath() {
         return getRootPath() + BLOCKS_PATH; }
     public static String getNewUserPath() {
         return getRootPath() + USER_PATH; }
     public static String getUserPath(Context context) {
-        return getRootPath() + USER_PATH + getPhoneNumber(context) + "/"; }
+        return getRootPath() + USER_PATH + "/" + getPhoneNumber(context); }
     public static String getNewDevicePath(Context context) {
         return getUserPath(context) + NEW_DEVICE_PATH; }
     public static String getExistsPath(Context context) {
         return getUserPath(context) + EXISTS_PATH; }
     public static String getConversationPath(String conversationId) {
-        return getRootPath() + CONVERSATION_PATH + conversationId; }
-
-    public static String readResource(Context context, int resourceId) throws IOException {
-        InputStream inputStream = context.getResources().openRawResource(resourceId);
-        byte[] reader = new byte[inputStream.available()];
-        while (inputStream.read(reader) != -1);
-
-        return new String(reader);
-    }
+        return getRootPath() + CONVERSATION_PATH + "/" + conversationId; }
 
     public static ListeningExecutorService newExecutorService() {
         return MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(1));
@@ -87,7 +83,7 @@ public class API {
             //get json
             JSONArray array = jsonArrayFromResponse(input);
             //create blocks through json
-            ArrayList<BlockItem> blocks = new ArrayList<BlockItem>();
+            ArrayList<BlockItem> blocks = new ArrayList<>();
             for (int i = 0; i < array.length(); i++) {
                 blocks.add(new BlockItem(array.getJSONObject(i)));
             }
@@ -104,11 +100,20 @@ public class API {
     }
 
     public static ListenableFuture<Boolean> postUser(
-            ListeningExecutorService ex, Context context) {
+            ListeningExecutorService ex, Context context, String regId) {
+        DataStore dataStore = DataStore.getSingletonInstance(context);
+
         try {
+            JSONObject device = new JSONObject();
+            device.put(REGISTRATION_ID, regId);
+            device.put(TYPE, "android");
+
             JSONObject ret = new JSONObject();
             ret.put("user", getPhoneNumber(context));
-            return postBooleanValue(ex, getNewUserPath(), ret);
+            ret.put("device", device);
+            ret.put("public_key", dataStore.getPublicKey());
+
+            return postSuccess(ex, getNewUserPath(), ret);
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -120,9 +125,9 @@ public class API {
             ListeningExecutorService ex, Context context, String regId) {
         try {
             JSONObject ret = new JSONObject();
-            ret.put("deviceType", "android");
-            ret.put("key", regId);
-            return postBooleanValue(ex, getNewDevicePath(context), ret);
+            ret.put(REGISTRATION_ID, regId);
+            ret.put(TYPE, "android");
+            return postSuccess(ex, getNewDevicePath(context), ret);
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -134,23 +139,18 @@ public class API {
             final ListeningExecutorService ex, final Context context, final String regId) {
         ListenableFuture<Boolean> userExists = getUserExists(ex, context);
         AsyncFunction<Boolean, Boolean> submitUser = (input) -> {
-            if (!input) return postUser(ex, context);
-            return returnListenableFuture(ex, true);
-        };
-        AsyncFunction<Boolean, Boolean> submitRegId = (input) -> {
-            if (input) return postRegistrationId(ex, context, regId);
-            return returnListenableFuture(ex, true);
+            if (!input) return postUser(ex, context, regId);
+            return postRegistrationId(ex, context, regId);
         };
 
         ListenableFuture<Boolean> total = Futures.transform(userExists, submitUser, ex);
-        total = Futures.transform(total, submitRegId, ex);
         return total;
     }
 
     public static ListenableFuture<Boolean> postData(
             final ListeningExecutorService ex, JSONObject fields, Request request) {
         Log.i(TAG, "Encoded fields JSON: " + fields.toString());
-        ListenableFuture<Boolean> result = putBooleanValue(ex, getConversationPath(request.conversationId), fields);
+        ListenableFuture<Boolean> result = putSuccess(ex, getConversationPath(request.conversationId), fields);
         return result;
     }
 
@@ -216,6 +216,10 @@ public class API {
         return null;
     }
 
+    private static boolean requestSucceeded(HttpResponse response) {
+        return response.getStatusLine().getStatusCode() == 200;
+    }
+
     private static boolean booleanFromResponse(HttpResponse response) {
         JSONObject jsonObject = jsonObjectFromResponse(response);
         if (jsonObject != null) {
@@ -227,6 +231,11 @@ public class API {
         }
 
         return false;
+    }
+
+    private static AsyncFunction<HttpResponse, Boolean> responseFutureToSuccess(
+            final ListeningExecutorService ex) {
+        return (input) -> returnListenableFuture(ex, requestSucceeded(input));
     }
 
     private static AsyncFunction<HttpResponse, Boolean> responseFutureToBoolean(
@@ -288,6 +297,13 @@ public class API {
         return response(ex, httpPut);
     }
 
+    private static ListenableFuture<Boolean> succeeded(
+            final ListeningExecutorService ex, ListenableFuture<HttpResponse> response) {
+        AsyncFunction<HttpResponse, Boolean> responseToBoolean = responseFutureToSuccess(ex);
+        ListenableFuture<Boolean> result = Futures.transform(response, responseToBoolean);
+        return result;
+    }
+
     private static ListenableFuture<Boolean> booleanValue(
             final ListeningExecutorService ex, ListenableFuture<HttpResponse> response) {
         AsyncFunction<HttpResponse, Boolean> responseToBoolean = responseFutureToBoolean(ex);
@@ -301,15 +317,15 @@ public class API {
         return booleanValue(ex, response);
     }
 
-    private static ListenableFuture<Boolean> postBooleanValue(
+    private static ListenableFuture<Boolean> postSuccess(
             final ListeningExecutorService ex, final String url, final JSONObject data) {
         ListenableFuture<HttpResponse> response = postRequest(ex, url, data);
-        return booleanValue(ex, response);
+        return succeeded(ex, response);
     }
 
-    private static ListenableFuture<Boolean> putBooleanValue(
+    private static ListenableFuture<Boolean> putSuccess(
             final ListeningExecutorService ex, final String url, final JSONObject data) {
         ListenableFuture<HttpResponse> response = putRequest(ex, url, data);
-        return booleanValue(ex, response);
+        return succeeded(ex, response);
     }
 }

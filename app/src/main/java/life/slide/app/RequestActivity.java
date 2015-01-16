@@ -44,11 +44,12 @@ public class RequestActivity extends ActionBarActivity {
         BASE_URL = getResources().getString(R.string.hostname);
 
         try {
-            slideJs = API.readResource(this, R.raw.slide);
-            slideFormJs = API.readResource(this, R.raw.slide_form);
-            stylesCss = API.readResource(this, R.raw.styles);
-            jqueryJs = API.readResource(this, R.raw.jquery);
-            formTemplateHtml = API.readResource(this, R.raw.form_template);
+            DataStore dataStore = DataStore.getSingletonInstance(this);
+            slideJs = dataStore.readResource(R.raw.slide);
+            slideFormJs = dataStore.readResource(R.raw.slide_form);
+            stylesCss = dataStore.readResource(R.raw.styles);
+            jqueryJs = dataStore.readResource(R.raw.jquery);
+            formTemplateHtml = dataStore.readResource(R.raw.form_template);
         } catch (IOException e) {
             Log.i(TAG, "IO error on reading resource.");
             e.printStackTrace();

@@ -17,6 +17,7 @@ import android.support.v4.view.ViewPager;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.ViewGroup;
 import android.webkit.WebView;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GooglePlayServicesUtil;
@@ -74,17 +75,18 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
 
         //TODO: download all the blocks first
 
-        initializeKeypair();
+        initializeKeypair(() -> {
+            DataStore dataStore = DataStore.getSingletonInstance(this);
+            Log.i(TAG, "Got public key: " + dataStore.getPublicKey());
 
-        prefs = getGCMPreferences();
-        if (checkPlayServices()) {
-            gcm = GoogleCloudMessaging.getInstance(this);
-            regId = getRegistrationId();
-
-            Log.i(TAG, "regId: " + regId);
-
-            if (regId.isEmpty()) registerInBackground();
-        }
+            prefs = getGCMPreferences();
+            if (checkPlayServices()) {
+                gcm = GoogleCloudMessaging.getInstance(this);
+                regId = getRegistrationId();
+                Log.i(TAG, "regId: " + regId);
+                if (regId.isEmpty()) registerInBackground();
+            }
+        });
     }
 
 
@@ -152,24 +154,49 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
         }
     }
 
-    private void initializeKeypair() {
+    private void initializeKeypair(Runnable runnable) {
+        Log.i(TAG, "Initializing keypair");
+
         DataStore data = DataStore.getSingletonInstance(this);
         String privateKey = data.getPrivateKey();
         if (privateKey.equals("")) {
             WebView webView = new WebView(this);
-            Javascript.generateKeys(webView, (keys) -> {
-                try {
-                    JSONObject keypair = new JSONObject(keys);
-                    String privKey = keypair.getString("privateKey");
-                    String pubKey = keypair.getString("publicKey");
-                    data.setPrivateKey(privKey);
-                    data.setPublicKey(pubKey);
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
-            });
-        }
+            webView.getSettings().setJavaScriptEnabled(true);
+            this.addContentView(webView, new ViewGroup.LayoutParams(1, 1)); //to make sure javascript is working
 
+            try {
+                String baseUrl = getResources().getString(R.string.hostname);
+                webView.loadDataWithBaseURL(baseUrl,
+                        "<html><head></head><body></body></html>", "text/html", "utf-8", "");
+
+                DataStore dataStore = DataStore.getSingletonInstance(this);
+                String jquery = dataStore.readResource(R.raw.jquery);
+                String slideCrypto = dataStore.readResource(R.raw.slide);
+
+                Javascript.javascriptEval(webView, jquery, (x) -> {
+                    Javascript.javascriptEval(webView, slideCrypto, (y) -> {
+                        Javascript.generateKeys(webView, (keys) -> {
+                            try {
+                                JSONObject keypair = new JSONObject(keys);
+                                String privKey = keypair.getJSONObject("privateKey").toString();
+                                Javascript.getPublicKey(webView, privKey, (pubKey) -> {
+                                    data.setPrivateKey(privKey);
+                                    data.setPublicKey(pubKey);
+
+                                    runnable.run();
+                                });
+                            } catch (JSONException e) {
+                                e.printStackTrace();
+                            }
+                        });
+                    });
+                });
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } else {
+            runnable.run();
+        }
     }
 
     private String getRegistrationId() {
@@ -277,8 +304,4 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
         }
         return true;
     }
-
-
-
-
 }

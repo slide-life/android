@@ -1,6 +1,7 @@
 package life.slide.app;
 
 import android.content.Context;
+import android.provider.ContactsContract;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -17,6 +18,7 @@ public class TemplateLoader {
     private static Map<Integer, String> cache;
 
     public static String loadTemplate(Context context, String template) {
+        DataStore dataStore = DataStore.getSingletonInstance(context);
         int hash = template.hashCode();
 
         if (cache == null) cache = new HashMap<>();
@@ -37,7 +39,7 @@ public class TemplateLoader {
 
                 if (group.charAt(0) == '@') {
                     try {
-                        replacement = API.readResource(context, Integer.parseInt(group.substring(1)));
+                        replacement = dataStore.readResource(Integer.parseInt(group.substring(1)));
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
@@ -52,6 +54,7 @@ public class TemplateLoader {
     }
 
     public static String loadTemplate(Context context, String template, Map<String, String> variables) {
+        DataStore dataStore = DataStore.getSingletonInstance(context);
         int hash = template.hashCode() + variables.hashCode();
 
         if (cache == null) cache = new HashMap<>();
@@ -72,7 +75,7 @@ public class TemplateLoader {
 
                 if (group.charAt(0) == '@') {
                     try {
-                        replacement = API.readResource(context, Integer.parseInt(group.substring(1)));
+                        replacement = dataStore.readResource(Integer.parseInt(group.substring(1)));
                     } catch (IOException e) {
                         e.printStackTrace();
                     }

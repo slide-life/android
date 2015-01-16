@@ -7,6 +7,8 @@ import android.provider.ContactsContract;
 import android.util.Log;
 import android.util.Pair;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -52,6 +54,14 @@ public class DataStore {
         this.privateKey = context.getSharedPreferences(PRIVATE_KEY_FILE, Context.MODE_PRIVATE);
         initializeRequests();
         initializeBlocks();
+    }
+
+    public String readResource(int resourceId) throws IOException {
+        InputStream inputStream = context.getResources().openRawResource(resourceId);
+        byte[] reader = new byte[inputStream.available()];
+        while (inputStream.read(reader) != -1);
+
+        return new String(reader);
     }
 
     public void setPrivateKey(String s) {

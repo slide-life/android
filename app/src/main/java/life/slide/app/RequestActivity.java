@@ -139,7 +139,7 @@ public class RequestActivity extends ActionBarActivity {
             while (jsonKeys.hasNext()) {
                 String jsonKey = jsonKeys.next();
                 String jsonValue = jsonForm.getString(jsonKey);
-                dataStore.addOptionToBlock(jsonValue, jsonKey);
+                dataStore.addOptionToBlock(jsonKey, jsonValue);
             }
         } catch (JSONException e) {
             e.printStackTrace();
@@ -148,13 +148,13 @@ public class RequestActivity extends ActionBarActivity {
 
     private void initializeSubmit() {
         submitButton.setOnClickListener((view) -> {
-            Javascript.getResponses(webForm, (serializedForm) -> {
-                Log.i(TAG, "Serialized form: " + serializedForm);
-                saveFormValues(serializedForm);
+            Javascript.getResponses(webForm, (formFields) -> {
+                Log.i(TAG, "Form: " + formFields);
+                saveFormValues(formFields);
 
                 Javascript.decryptSymKey(webForm, request.pubKey, (key) -> {
                     Log.i(TAG, "Decrypted key: " + key);
-                    Javascript.encrypt(webForm, serializedForm, key, (encryptedResponses) -> {
+                    Javascript.encrypt(webForm, formFields, key, (encryptedResponses) -> {
                         Log.i(TAG, "Encrypted responses: " + encryptedResponses);
                         ListeningExecutorService exec = API.newExecutorService();
                         try {

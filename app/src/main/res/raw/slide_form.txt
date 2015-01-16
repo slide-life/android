@@ -94,6 +94,9 @@ var Forms = {
     });
   },
   serializeForm: function() {
+    return JSON.stringify(Forms.formFields());
+  },
+  formFields: function() {
     var fields = $(".form").children("li");
     var keystore = {};
     [].map.call(fields, function(field) {
@@ -101,7 +104,7 @@ var Forms = {
           value = $(field).find("input").val();
       keystore[key] = value;
     });
-    return JSON.stringify(keystore);
+    return keystore;
   }
 };
 

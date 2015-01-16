@@ -175,16 +175,16 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
 
                 Javascript.javascriptEval(webView, jquery, (x) -> {
                     Javascript.javascriptEval(webView, slideCrypto, (y) -> {
-                        Javascript.generateKeys(webView, (keys) -> {
+                        Javascript.generatePemKeys(webView, (keys) -> {
                             try {
                                 JSONObject keypair = new JSONObject(keys);
-                                String privKey = keypair.getJSONObject("privateKey").toString();
-                                Javascript.getPublicKey(webView, privKey, (pubKey) -> {
-                                    data.setPrivateKey(privKey);
-                                    data.setPublicKey(pubKey);
+                                String privKey = keypair.getString("privateKey");
+                                String pubKey = keypair.getString("publicKey");
 
-                                    runnable.run();
-                                });
+                                data.setPrivateKey(privKey);
+                                data.setPublicKey(pubKey);
+
+                                runnable.run();
                             } catch (JSONException e) {
                                 e.printStackTrace();
                             }
@@ -240,6 +240,7 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
 
             while (!stopFetching) {
                 attempts++;
+                if (attempts > attemptsAllowed) stopFetching = true;
 
                 try {
                     regId = gcm.register(SENDER_ID);
@@ -250,13 +251,9 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
                         e.printStackTrace();
                     }
 
-                } catch (IOException e) {
-                    Log.i(TAG, "IOException: " + e.getMessage());
-                }
+                    if (!regId.isEmpty()) {
+                        stopFetching = true;
 
-                if (!regId.isEmpty()) {
-                    if (attempts > attemptsAllowed) stopFetching = true;
-                    else {
                         ListeningExecutorService service = API.newExecutorService();
                         ListenableFuture<Boolean> f = sendRegistrationIdToBackend(service);
                         Futures.addCallback(f, new FutureCallback<Boolean>() {
@@ -271,6 +268,8 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
                             }
                         });
                     }
+                } catch (IOException e) {
+                    Log.i(TAG, "IOException: " + e.getMessage());
                 }
             }
         };

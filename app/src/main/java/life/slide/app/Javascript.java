@@ -20,24 +20,28 @@ public class Javascript {
     }
 
     public static void getResponses(WebView webView, OnJavascriptEvalListener cb) {
-        javascriptEval(webView, "Forms.serializeForm()", cb);
+        javascriptEval(webView, "Forms.formFields()", cb);
     }
 
     public static void encrypt(WebView webView, String jsonObject, String key, OnJavascriptEvalListener cb) {
         javascriptEval(webView,
-                String.format("JSON.stringify({fields: Slide.crypto.AES.encryptData(%s, '%s'), blocks:[]})", jsonObject, key),
+                String.format("({fields: Slide.crypto.AES.encryptData(%s, %s), blocks:[]})", jsonObject, key),
+                cb);
+    }
+
+    public static void generatePemKeys(WebView webView, OnJavascriptEvalListener cb) {
+        javascriptEval(webView,
+                "(function() {" +
+                    "var keys = forge.pki.rsa.generateKeyPair({ bits: 512, e: 0x10001 });" +
+                    "var pemKeys = Slide.crypto.packKeys(keys);" +
+                    "return pemKeys;" +
+                "})()",
                 cb);
     }
 
     public static void generateKeys(WebView webView, OnJavascriptEvalListener cb) {
         javascriptEval(webView,
                 "forge.pki.rsa.generateKeyPair({ bits: 512, e: 0x10001 })",
-                cb);
-    }
-
-    public static void getPublicKey(WebView webView, String privateKey, OnJavascriptEvalListener cb) {
-        javascriptEval(webView,
-                String.format("forge.pki.rsa.setPublicKey(%s.n, %s.e)", privateKey, privateKey),
                 cb);
     }
 

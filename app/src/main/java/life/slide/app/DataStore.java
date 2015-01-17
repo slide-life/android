@@ -32,6 +32,9 @@ public class DataStore {
     private final String REQUEST_STORAGE_FILE = "requests";
     private final String PRIVATE_KEY_FILE = "private_key";
 
+    private final int PUSH = 0;
+    private final int PULL = 1;
+
     public Context context;
     public SharedPreferences blocks, requests, privateKey;
 
@@ -93,6 +96,17 @@ public class DataStore {
         addToIndex(requests, request);
     }
 
+    public void processPullRequest(Request request) throws IllegalArgumentException {
+        if (request.type == PULL) {
+            for (String key : request.blockValues.keySet()) {
+                String value = request.blockValues.get(key);
+                addOptionToBlock(key, value);
+            }
+        } else {
+            throw new IllegalArgumentException("Need a pull request.");
+        }
+    }
+
     public void commitRequestList(ArrayList<Request> requestList) {
         Set<String> requestSet = new HashSet<>();
         for (Request r : requestList) requestSet.add(r.toJson());
@@ -101,7 +115,7 @@ public class DataStore {
 
     public ArrayList<Request> getRequests() {
         Set<String> index = getIndex(requests);
-        ArrayList<Request> ret = new ArrayList<Request>();
+        ArrayList<Request> ret = new ArrayList<>();
         for (String s : index) ret.add(new Request(s));
         return ret;
     }

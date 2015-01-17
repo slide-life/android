@@ -2,6 +2,12 @@ package life.slide.app;
 
 import android.util.Log;
 import android.webkit.WebView;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 
 /**
  * Created by zeigjeder on 1/13/15.
@@ -10,6 +16,27 @@ public class Javascript {
     private static final String TAG = "Slide -> Javascript";
 
     public static interface OnJavascriptEvalListener { public void callback(String jsResult); }
+
+    public static Map<String, String> decodeJsonMap(JSONObject jsonObject) throws JSONException {
+        Map<String, String> ret = new HashMap<>();
+
+        Iterator<String> keys = jsonObject.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            ret.put(key, jsonObject.getString(key));
+        }
+
+        return ret;
+    }
+    public static JSONObject encodeJsonMap(Map<String, String> map) throws JSONException {
+        JSONObject ret = new JSONObject();
+
+        for (String key : map.keySet()) {
+            ret.put(key, map.get(key));
+        }
+
+        return ret;
+    }
 
     public static void javascriptEval(WebView webView, String javascript, OnJavascriptEvalListener listener) {
         Log.i(TAG, "Evaluating: " + javascript);

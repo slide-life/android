@@ -43,16 +43,17 @@ public class GcmIntentService extends IntentService {
             } else if (GoogleCloudMessaging.
                     MESSAGE_TYPE_MESSAGE.equals(messageType)) {
                 int updateType = Integer.parseInt(intent.getStringExtra("type"));
+                Intent received;
                 switch (updateType) {
                     case REQUEST:
                         String requestJson = intent.getStringExtra("json");
                         Log.i(TAG, "Json request received: " + requestJson);
 
-
                         //send out intent
-                        Intent received = new Intent(REQUEST_INTENT);
+                        received = new Intent(REQUEST_INTENT);
                         received.putExtra("request", requestJson);
                         LocalBroadcastManager.getInstance(this).sendBroadcast(received);
+                        break;
 
                     default:
                 }

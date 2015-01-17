@@ -5,9 +5,9 @@
     <string name="title_section1">Requests</string>
     <string name="title_section2">QR</string>
     <string name="title_section3">Edit profile</string>
-    <string name="hello_world">Hello world!</string>
     <string name="action_settings">Settings</string>
-    <string name="hello_blank_fragment">Hello blank fragment</string>
-    <string name="title_activity_request">RequestActivity</string>
+    <string name="title_activity_request">Request</string>
+
+    <string name="hostname">slide-vendor-sandbox.herokuapp.com</string>
 
 </resources>

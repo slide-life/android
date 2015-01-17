@@ -78,20 +78,17 @@ public class RequestsFragment extends android.support.v4.app.Fragment {
 
         requests = dataStore.getRequests();
         requestsList = (ListView) rootView.findViewById(R.id.requestsList);
-        requestAdapter = new ArrayAdapter<Request>(context,
+        requestAdapter = new ArrayAdapter<>(context,
                 android.R.layout.simple_list_item_1, requests);
         requestsList.setAdapter(requestAdapter);
-        requestsList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-            @Override
-            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                Log.i(TAG, "Clicked...");
-                Request req = requestAdapter.getItem(position);
+        requestsList.setOnItemClickListener((parent, view, position, id) -> {
+            Log.i(TAG, "Clicked...");
+            Request req = requestAdapter.getItem(position);
 
-                Intent requestActivityIntent = new Intent(view.getContext(), RequestActivity.class);
-                requestActivityIntent.putExtra("request", req.toJson());
-                Log.i(TAG, "Starting request activity...");
-                startActivity(requestActivityIntent);
-            }
+            Intent requestActivityIntent = new Intent(view.getContext(), RequestActivity.class);
+            requestActivityIntent.putExtra("request", req.toJson());
+            Log.i(TAG, "Starting request activity...");
+            startActivity(requestActivityIntent);
         });
 
         return rootView;

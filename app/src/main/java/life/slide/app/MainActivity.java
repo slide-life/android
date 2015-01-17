@@ -17,6 +17,8 @@ import android.support.v4.view.ViewPager;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.ViewGroup;
+import android.webkit.WebView;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GooglePlayServicesUtil;
 import com.google.android.gms.gcm.GoogleCloudMessaging;
@@ -24,6 +26,8 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 
 public class MainActivity extends ActionBarActivity implements ActionBar.TabListener {
@@ -71,15 +75,18 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
 
         //TODO: download all the blocks first
 
-        prefs = getGCMPreferences();
-        if (checkPlayServices()) {
-            gcm = GoogleCloudMessaging.getInstance(this);
-            regId = getRegistrationId();
+        initializeKeypair(() -> {
+            DataStore dataStore = DataStore.getSingletonInstance(this);
+            Log.i(TAG, "Got public key: " + dataStore.getPublicKey());
 
-            Log.i(TAG, "regId: " + regId);
-
-            if (regId.isEmpty()) registerInBackground();
-        }
+            prefs = getGCMPreferences();
+            if (checkPlayServices()) {
+                gcm = GoogleCloudMessaging.getInstance(this);
+                regId = getRegistrationId();
+                Log.i(TAG, "regId: " + regId);
+                if (regId.isEmpty()) registerInBackground();
+            }
+        });
     }
 
 
@@ -147,6 +154,51 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
         }
     }
 
+    private void initializeKeypair(Runnable runnable) {
+        Log.i(TAG, "Initializing keypair");
+
+        DataStore data = DataStore.getSingletonInstance(this);
+        String privateKey = data.getPrivateKey();
+        if (privateKey.equals("")) {
+            WebView webView = new WebView(this);
+            webView.getSettings().setJavaScriptEnabled(true);
+            this.addContentView(webView, new ViewGroup.LayoutParams(1, 1)); //to make sure javascript is working
+
+            try {
+                String baseUrl = getResources().getString(R.string.hostname);
+                webView.loadDataWithBaseURL(baseUrl,
+                        "<html><head></head><body></body></html>", "text/html", "utf-8", "");
+
+                DataStore dataStore = DataStore.getSingletonInstance(this);
+                String jquery = dataStore.readResource(R.raw.jquery);
+                String slideCrypto = dataStore.readResource(R.raw.slide);
+
+                Javascript.javascriptEval(webView, jquery, (x) -> {
+                    Javascript.javascriptEval(webView, slideCrypto, (y) -> {
+                        Javascript.generatePemKeys(webView, (keys) -> {
+                            try {
+                                JSONObject keypair = new JSONObject(keys);
+                                String privKey = keypair.getString("privateKey");
+                                String pubKey = keypair.getString("publicKey");
+
+                                data.setPrivateKey(privKey);
+                                data.setPublicKey(pubKey);
+
+                                runnable.run();
+                            } catch (JSONException e) {
+                                e.printStackTrace();
+                            }
+                        });
+                    });
+                });
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } else {
+            runnable.run();
+        }
+    }
+
     private String getRegistrationId() {
         String registrationId = prefs.getString(PROPERTY_REG_ID, "");
         if (registrationId.isEmpty()) {
@@ -181,47 +233,43 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
         Log.i(TAG, "Getting GCM instance...");
         gcm = (gcm != null) ? gcm : GoogleCloudMessaging.getInstance(this);
 
-        Runnable task = new Runnable() {
-            @Override
-            public void run() {
-                int attemptsAllowed = 5;
-                int attempts = 0;
-                boolean stopFetching = false;
+        Runnable task = () -> {
+            int attemptsAllowed = 5;
+            int attempts = 0;
+            boolean stopFetching = false;
 
-                while (!stopFetching) {
-                    attempts++;
+            while (!stopFetching) {
+                attempts++;
+                if (attempts > attemptsAllowed) stopFetching = true;
 
+                try {
+                    regId = gcm.register(SENDER_ID);
+                    Log.i(TAG, "Device registered, regId=" + regId);
                     try {
-                        regId = gcm.register(SENDER_ID);
-                        Log.i(TAG, "Device registered, regId=" + regId);
-                        try {
-                            Thread.sleep(2000);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-
-                    } catch (IOException e) {
-                        Log.i(TAG, "IOException: " + e.getMessage());
+                        Thread.sleep(2000);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
                     }
 
                     if (!regId.isEmpty()) {
-                        if (attempts > attemptsAllowed) stopFetching = true;
-                        else {
-                            ListeningExecutorService service = SlideServices.newExecutorService();
-                            ListenableFuture<Boolean> f = sendRegistrationIdToBackend(service);
-                            Futures.addCallback(f, new FutureCallback<Boolean>() {
-                                @Override
-                                public void onSuccess(Boolean result) {
-                                    if (result) storeRegistrationId();
-                                }
+                        stopFetching = true;
 
-                                @Override
-                                public void onFailure(Throwable t) {
-                                    Log.i(TAG, "Failure: " + t.getMessage());
-                                }
-                            });
-                        }
+                        ListeningExecutorService service = API.newExecutorService();
+                        ListenableFuture<Boolean> f = sendRegistrationIdToBackend(service);
+                        Futures.addCallback(f, new FutureCallback<Boolean>() {
+                            @Override
+                            public void onSuccess(Boolean result) {
+                                if (result) storeRegistrationId();
+                            }
+
+                            @Override
+                            public void onFailure(Throwable t) {
+                                Log.i(TAG, "Failure: " + t.getMessage());
+                            }
+                        });
                     }
+                } catch (IOException e) {
+                    Log.i(TAG, "IOException: " + e.getMessage());
                 }
             }
         };
@@ -230,7 +278,7 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
 
     private ListenableFuture<Boolean> sendRegistrationIdToBackend(
             ListeningExecutorService service) {
-        return SlideServices.processRegistrationId(service, this, regId);
+        return API.processRegistrationId(service, this, regId);
     }
 
     private void storeRegistrationId() {
@@ -255,8 +303,4 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
         }
         return true;
     }
-
-
-
-
 }

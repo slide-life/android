@@ -3,9 +3,11 @@ buildscript {
         jcenter()
     }
     dependencies {
+        classpath 'me.tatarka:gradle-retrolambda:2.5.0'
         classpath 'com.android.tools.build:gradle:0.14.2'
     }
 }
+apply plugin: 'retrolambda'
 apply plugin: 'com.android.application'
 
 repositories {
@@ -17,9 +19,14 @@ android {
     compileSdkVersion 21
     buildToolsVersion "21.1.2"
 
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
     defaultConfig {
         applicationId "life.slide.app"
-        minSdkVersion 11
+        minSdkVersion 19
         targetSdkVersion 21
         versionCode 1
         versionName "1.0"

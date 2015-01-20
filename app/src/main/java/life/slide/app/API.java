@@ -4,6 +4,7 @@ import android.content.Context;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 
+import android.webkit.WebView;
 import com.google.common.util.concurrent.*;
 
 import org.apache.http.*;
@@ -25,6 +26,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.concurrent.*;
 
 /**
@@ -32,7 +34,7 @@ import java.util.concurrent.*;
  */
 public class API {
     private static final String TAG = "Slide -> API";
-    private static final String HOSTNAME = "slide-vendor-sandbox.herokuapp.com";
+    private static final String HOSTNAME = "slide-sandbox.herokuapp.com";
     private static final String PORT = "";
 
     private static final String BLOCKS_PATH = "/blocks";
@@ -40,6 +42,7 @@ public class API {
     private static final String NEW_DEVICE_PATH = "/devices";
     private static final String EXISTS_PATH = "/exists";
     private static final String CONVERSATION_PATH = "/conversations";
+    private static final String PROFILE_PATH = "/profile";
 
     private static final String REGISTRATION_ID = "registration_id";
     private static final String TYPE = "type";
@@ -64,6 +67,8 @@ public class API {
         return getRootPath() + USER_PATH; }
     public static String getUserPath(Context context) {
         return getRootPath() + USER_PATH + "/" + getPhoneNumber(context); }
+    public static String getProfilePath(Context context) {
+        return getUserPath(context) + PROFILE_PATH; }
     public static String getNewDevicePath(Context context) {
         return getUserPath(context) + NEW_DEVICE_PATH; }
     public static String getExistsPath(Context context) {
@@ -111,6 +116,7 @@ public class API {
             JSONObject ret = new JSONObject();
             ret.put("user", getPhoneNumber(context));
             ret.put("device", device);
+            ret.put("key", dataStore.getSymmetricKey());
             ret.put("public_key", dataStore.getPublicKey());
 
             return postSuccess(ex, getNewUserPath(), ret);
@@ -148,10 +154,31 @@ public class API {
     }
 
     public static ListenableFuture<Boolean> postData(
+            final ListeningExecutorService ex,
+            WebView webView, JSONObject fields, JSONObject encryptedPatch, Request request)
+            throws JSONException {
+        JSONObject patchedFields = new JSONObject();
+
+        Iterator<String> keys = fields.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            patchedFields.put(key, fields.get(key));
+        }
+
+        patchedFields.put("patch", encryptedPatch);
+        return postPatchedData(ex, patchedFields, request);
+    }
+
+    public static ListenableFuture<Boolean> postPatchedData(
             final ListeningExecutorService ex, JSONObject fields, Request request) {
-        Log.i(TAG, "Encoded fields JSON: " + fields.toString());
         ListenableFuture<Boolean> result = putSuccess(ex, getConversationPath(request.conversationId), fields);
         return result;
+    }
+
+    public static ListenableFuture<JSONObject> getProfile(
+            final ListeningExecutorService ex, final Context context) {
+        ListenableFuture<HttpResponse> response = getRequest(ex, getProfilePath(context));
+        return Futures.transform(response, responseFutureToJSON(ex));
     }
 
     private static <T> ListenableFuture<T> returnListenableFuture(
@@ -233,6 +260,11 @@ public class API {
         return false;
     }
 
+    private static AsyncFunction<HttpResponse, JSONObject> responseFutureToJSON(
+            final ListeningExecutorService ex) {
+        return (input) -> returnListenableFuture(ex, jsonObjectFromResponse(input));
+    }
+
     private static AsyncFunction<HttpResponse, Boolean> responseFutureToSuccess(
             final ListeningExecutorService ex) {
         return (input) -> returnListenableFuture(ex, requestSucceeded(input));
@@ -269,16 +301,20 @@ public class API {
         return response(ex, httpGet);
     }
 
-    private static ListenableFuture<HttpResponse> postRequest(
-            final ListeningExecutorService ex, final String url, final JSONObject data) {
-        HttpPost httpPost = new HttpPost(url);
+    private static void setJsonEntity(HttpEntityEnclosingRequest httpRequest, final JSONObject data) {
         try {
             StringEntity se = new StringEntity(data.toString());
             se.setContentEncoding(new BasicHeader(HTTP.CONTENT_TYPE, "application/json"));
-            httpPost.setEntity(se);
+            httpRequest.setEntity(se);
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private static ListenableFuture<HttpResponse> postRequest(
+            final ListeningExecutorService ex, final String url, final JSONObject data) {
+        HttpPost httpPost = new HttpPost(url);
+        setJsonEntity(httpPost, data);
 
         return response(ex, httpPost);
     }
@@ -286,15 +322,14 @@ public class API {
     private static ListenableFuture<HttpResponse> putRequest(
             final ListeningExecutorService ex, final String url, final JSONObject data) {
         HttpPut httpPut = new HttpPut(url);
-        try {
-            StringEntity se = new StringEntity(data.toString());
-            se.setContentEncoding(new BasicHeader(HTTP.CONTENT_TYPE, "application/json"));
-            httpPut.setEntity(se);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        setJsonEntity(httpPut, data);
 
         return response(ex, httpPut);
+    }
+
+    private static ListenableFuture<HttpResponse> patchRequest(
+            final ListeningExecutorService ex, final String url, final JSONObject data) {
+        //TODO: http patch
     }
 
     private static ListenableFuture<Boolean> succeeded(

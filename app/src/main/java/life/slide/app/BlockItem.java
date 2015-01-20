@@ -29,11 +29,11 @@ public class BlockItem {
         return this.blockName;
     }
 
-    public Pair<String, Set<String>> getOptions() {
+    public Set<String> getOptions() {
         return dataStore.getBlockOptions(this.blockName);
     }
 
-    public boolean addOption(String option) {
-        return dataStore.addOptionToBlock(this.blockName, option);
+    public void addOption(String option) {
+        dataStore.addOptionToBlock(this.blockName, option);
     }
 }

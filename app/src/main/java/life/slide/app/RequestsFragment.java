@@ -14,6 +14,7 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
+import org.json.JSONException;
 
 import java.util.ArrayList;
 
@@ -36,11 +37,18 @@ public class RequestsFragment extends android.support.v4.app.Fragment {
             String requestJson = intent.getStringExtra("request");
             Log.i(TAG, "Received: " + requestJson);
 
-            dataStore.insertRawRequest(requestJson);
-
             Request request = new Request(requestJson);
-            requests.add(request);
-            requestAdapter.notifyDataSetChanged();
+            if (request.verb.equals(Request.FORCE_DEPOSIT)) {
+                try {
+                    DataStore.getSingletonInstance().applyPatch(request.fields); //decrypt the damn thing
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            } else {
+                dataStore.insertRawRequest(requestJson);
+                requests.add(request);
+                requestAdapter.notifyDataSetChanged();
+            }
         }
     };
 
@@ -85,10 +93,14 @@ public class RequestsFragment extends android.support.v4.app.Fragment {
             Log.i(TAG, "Clicked...");
             Request req = requestAdapter.getItem(position);
 
-            Intent requestActivityIntent = new Intent(view.getContext(), RequestActivity.class);
-            requestActivityIntent.putExtra("request", req.toJson());
-            Log.i(TAG, "Starting request activity...");
-            startActivity(requestActivityIntent);
+            if (req.verb.equals(Request.REQUEST)) {
+                Intent requestActivityIntent = new Intent(view.getContext(), RequestActivity.class);
+                requestActivityIntent.putExtra("request", req.toJson());
+                Log.i(TAG, "Starting request activity...");
+                startActivity(requestActivityIntent);
+            } else if (req.verb.equals(Request.DEPOSIT)) {
+
+            }
         });
 
         return rootView;

@@ -5,48 +5,58 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Created by Michael on 12/22/2014.
  */
 public class Request {
-    private final String CONVERSATION = "conversation";
-    private final String CONVERSATION_ID = "id"; //TODO: update the SharedPrefs xml in the tests
-    private final String NAME = "name";
-    private final String DESCRIPTION = "description";
-    private final String BLOCKS = "blocks";
-    private final String PUBLIC_KEY = "key";
+    private static final String CONVERSATION = "conversation";
+    private static final String CONVERSATION_ID = "id"; //TODO: update the SharedPrefs xml in the tests
+    private static final String NAME = "name";
+    private static final String DESCRIPTION = "description";
+    private static final String KEY = "key";
+
+    private static final String BLOCKS = "blocks";
+    private static final String FIELDS = "fields";
+
+    private static final String VERB = "verb";
+
+    public static final String REQUEST = "request";
+    public static final String DEPOSIT = "deposit";
+    public static final String FORCE_DEPOSIT = "force_deposit";
 
     public String conversationId; //actually conversation id
     public String name;
     public String description;
     public ArrayList<String> blocks;
-    public String pubKey;
-
-    public Request(String conversationId, String name, String description,
-                   ArrayList<String> blocks, String pubKey) {
-        this.conversationId = conversationId;
-        this.name = name;
-        this.description = description;
-        this.blocks = blocks;
-        this.pubKey = pubKey;
-    }
+    public Map<String, Set<String>> fields;
+    public String key;
+    public String verb;
 
     public Request(String json) {
         try {
             JSONObject object = new JSONObject(json);
+            this.verb = object.getString(VERB);
 
-            JSONArray blocksJson = object.getJSONArray(BLOCKS);
-            ArrayList<String> retBlocks = new ArrayList<>();
-            for (int i = 0; i < blocksJson.length(); i++)
-                retBlocks.add(blocksJson.getString(i)); //TODO: replace with getObject
-            this.blocks = retBlocks;
+            if (this.verb.equals(REQUEST)) {
+                JSONArray blocksJson = object.getJSONArray(BLOCKS);
+                ArrayList<String> retBlocks = new ArrayList<>();
+                for (int i = 0; i < blocksJson.length(); i++)
+                    retBlocks.add(blocksJson.getString(i)); //TODO: replace with getObject
+                this.blocks = retBlocks;
+            } else if (this.verb.equals(DEPOSIT) ||
+                       this.verb.equals(FORCE_DEPOSIT)) {
+                JSONObject fieldsJson = object.getJSONObject(FIELDS);
+                this.fields = Javascript.jsonObjectToProfile(fieldsJson);
+            }
 
             JSONObject conversationJson = object.getJSONObject(CONVERSATION);
             this.conversationId = conversationJson.getString(CONVERSATION_ID);
             this.name = conversationJson.getString(NAME);
             this.description = conversationJson.getString(DESCRIPTION);
-            this.pubKey = conversationJson.getString(PUBLIC_KEY);
+            this.key = conversationJson.getString(KEY);
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -64,7 +74,7 @@ public class Request {
             conversationJson.put(CONVERSATION_ID, conversationId);
             conversationJson.put(NAME, name);
             conversationJson.put(DESCRIPTION, description);
-            conversationJson.put(PUBLIC_KEY, pubKey);
+            conversationJson.put(KEY, key);
             object.put(CONVERSATION, conversationJson);
 
             JSONArray blocksJson = new JSONArray(blocks);

@@ -1,6 +1,8 @@
 package life.slide.app;
 
 import android.app.ActionBar;
+import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
@@ -10,7 +12,7 @@ import android.view.*;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.*;
-import com.google.common.util.concurrent.ListeningExecutorService;
+import com.google.common.util.concurrent.*;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -64,7 +66,7 @@ public class RequestActivity extends ActionBarActivity {
         requestLabel = (TextView) findViewById(R.id.requestLabel);
         requestLabel.setText(request.name);
 
-        webForm = (WebView) findViewById(R.id.webForm);
+        webForm = (WebView) findViewById(R.id.depositView);
         webForm.getSettings().setJavaScriptEnabled(true);
 
         submitButton = (Button) findViewById(R.id.submitButton);
@@ -118,7 +120,7 @@ public class RequestActivity extends ActionBarActivity {
         for (String blockName : request.blocks) {
             Log.i(TAG, "Processing block " + blockName);
             BlockItem block = new BlockItem(blockName);
-            Set<String> options = block.getOptions().second;
+            Set<String> options = block.getOptions();
             ArrayList<String> optionsQuoted = new ArrayList<>();
             for (String o : options) optionsQuoted.add(String.format("\"%s\"", o));
 
@@ -152,13 +154,47 @@ public class RequestActivity extends ActionBarActivity {
                 Log.i(TAG, "Form: " + formFields);
                 saveFormValues(formFields);
 
-                Javascript.decryptSymKey(webForm, request.pubKey, (key) -> {
+                Javascript.decryptSymKey(webForm, request.key, (key) -> {
                     Log.i(TAG, "Decrypted key: " + key);
                     Javascript.encrypt(webForm, formFields, key, (encryptedResponses) -> {
                         Log.i(TAG, "Encrypted responses: " + encryptedResponses);
+
+
                         ListeningExecutorService exec = API.newExecutorService();
                         try {
-                            API.postData(exec, new JSONObject(encryptedResponses), request);
+                            JSONObject jsonEncryptedResponses = new JSONObject(encryptedResponses);
+
+                            Javascript.encrypt(webForm, formFields, key, (encryptedPatch) -> {
+                                try {
+                                    ListenableFuture<Boolean> dataPost = API.postData(exec, webForm,
+                                            jsonEncryptedResponses,
+                                            new JSONObject(encryptedPatch),
+                                            request);
+                                    Activity self = this;
+                                    Futures.addCallback(dataPost, new FutureCallback<Boolean>() {
+                                        @Override
+                                        public void onSuccess(Boolean result) {
+                                            //TODO: do something other than just go back
+                                            Intent mainIntent = new Intent(self, MainActivity.class);
+                                            Log.i(TAG, "Back to main activity...");
+                                            startActivity(mainIntent);
+                                        }
+
+                                        @Override
+                                        public void onFailure(Throwable thrown) {
+                                            //TODO: do something better than just toast it
+                                            Context context = getApplicationContext();
+                                            CharSequence toastText = thrown.getMessage();
+                                            int duration = Toast.LENGTH_SHORT;
+
+                                            Toast toast = Toast.makeText(context, toastText, duration);
+                                            toast.show();
+                                        }
+                                    });
+                                } catch (JSONException e) {
+                                    e.printStackTrace();
+                                }
+                            });
                         } catch (JSONException e) {
                             Log.i(TAG, "JSON exception for json: " + encryptedResponses + "!");
                             e.printStackTrace();

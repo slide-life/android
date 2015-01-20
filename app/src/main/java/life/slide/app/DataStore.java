@@ -6,14 +6,13 @@ import android.content.SharedPreferences.Editor;
 import android.provider.ContactsContract;
 import android.util.Log;
 import android.util.Pair;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Created by Michael on 12/22/2014.
@@ -21,14 +20,15 @@ import java.util.Set;
  */
 public class DataStore {
     private static DataStore singletonInstance;
+    private static Map<String, Set<String>> sharedProfile;
 
     private final String TAG = "Slide -> DataStore";
 
     private final String INDEX = "index";
     private final String PRIVATE_KEY = "private_key";
     private final String PUBLIC_KEY = "public_key";
+    private final String SYMMETRIC_KEY = "key";
 
-    private final String BLOCK_STORAGE_FILE = "blocks";
     private final String REQUEST_STORAGE_FILE = "requests";
     private final String PRIVATE_KEY_FILE = "private_key";
 
@@ -49,11 +49,9 @@ public class DataStore {
         Log.i(TAG, "dataStore instance");
 
         this.context = context;
-        this.blocks = context.getSharedPreferences(BLOCK_STORAGE_FILE, Context.MODE_PRIVATE);
         this.requests = context.getSharedPreferences(REQUEST_STORAGE_FILE, Context.MODE_PRIVATE);
         this.privateKey = context.getSharedPreferences(PRIVATE_KEY_FILE, Context.MODE_PRIVATE);
         initializeRequests();
-        initializeBlocks();
     }
 
     public String readResource(int resourceId) throws IOException {
@@ -62,6 +60,36 @@ public class DataStore {
         while (inputStream.read(reader) != -1);
 
         return new String(reader);
+    }
+
+    public void storeProfile(JSONObject profile) throws JSONException {
+        this.sharedProfile = Javascript.jsonObjectToProfile(profile);
+    }
+
+    public void applyPatch(Map<String, Set<String>> patch) throws JSONException {
+        for (String key : patch.keySet()) {
+            Set<String> value = patch.get(key);
+
+            if (!sharedProfile.containsKey(key)) {
+                sharedProfile.put(key, new HashSet<String>());
+            }
+
+            Set<String> profile = sharedProfile.get(key);
+            profile.addAll(value);
+        }
+    }
+
+    public void applyPatch(JSONObject patch) throws JSONException {
+        Map<String, Set<String>> patchMap = Javascript.jsonObjectToProfile(patch);
+        applyPatch(patchMap);
+    }
+
+    public Set<String> getBlockOptions(String blockName) {
+        return sharedProfile.get(blockName);
+    }
+
+    public void addOptionToBlock(String blockName, String option) {
+        getBlockOptions(blockName).add(option);
     }
 
     public void setPrivateKey(String s) {
@@ -76,6 +104,12 @@ public class DataStore {
         editor.commit();
     }
 
+    public void setSymmetricKey(String s) {
+        Editor editor = privateKey.edit();
+        editor.putString(SYMMETRIC_KEY, s);
+        editor.commit();
+    }
+
     public String getPrivateKey() {
         return privateKey.getString(PRIVATE_KEY, "");
     }
@@ -83,6 +117,8 @@ public class DataStore {
     public String getPublicKey() {
         return privateKey.getString(PUBLIC_KEY, "");
     }
+
+    public String getSymmetricKey() { return privateKey.getString(SYMMETRIC_KEY, ""); }
 
     public void insertRequest(Request request) {
         String serializedRequest = request.toJson();
@@ -110,34 +146,9 @@ public class DataStore {
         return getIndex(blocks).contains(blockName);
     }
 
-    public Pair<String, Set<String>> getBlockOptions(String blockName) {
-        String defaultOption = blocks.getString(blockName, "");
-        Set<String> blockOptions = blocks.getStringSet(
-                getOptionsName(blockName), new HashSet<>());
-        return new Pair<>(defaultOption, blockOptions);
-    }
-
-    public boolean addOptionToBlock(String blockName, String option) {
-        addToIndex(blocks, blockName);
-
-        Set<String> options = blocks.getStringSet(getOptionsName(blockName), new HashSet<>());
-        options.add(option);
-
-        Editor editor = blocks.edit();
-        editor.putString(blockName, option);
-        editor.putStringSet(getOptionsName(blockName), options);
-        return editor.commit();
-    }
-
     private void initializeRequests() {
         if (!requests.contains(INDEX)) {
             putIndex(requests, new HashSet<>());
-        }
-    }
-
-    private void initializeBlocks() {
-        if (!blocks.contains(INDEX)) {
-            putIndex(blocks, new HashSet<>());
         }
     }
 
@@ -163,9 +174,5 @@ public class DataStore {
         editor.putString("history", new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date()));
         editor.putStringSet(INDEX, index);
         editor.commit();
-    }
-
-    private String getOptionsName(String blockName) {
-        return blockName + "$options";
     }
 }

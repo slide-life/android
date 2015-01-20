@@ -2,6 +2,7 @@ package life.slide.app;
 
 import java.io.IOException;
 import java.util.Locale;
+import java.util.concurrent.Future;
 
 import android.content.*;
 import android.content.pm.PackageInfo;
@@ -73,11 +74,25 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
                             .setTabListener(this));
         }
 
-        //TODO: download all the blocks first
-
         initializeKeypair(() -> {
             DataStore dataStore = DataStore.getSingletonInstance(this);
             Log.i(TAG, "Got public key: " + dataStore.getPublicKey());
+
+            ListeningExecutorService ex = API.newExecutorService();
+            Futures.addCallback(API.getProfile(ex, this), new FutureCallback<JSONObject>() {
+                @Override
+                public void onSuccess(JSONObject result) {
+                    try {
+                        dataStore.storeProfile(result);
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                }
+
+                @Override
+                public void onFailure(Throwable thrown) {
+                }
+            });
 
             prefs = getGCMPreferences();
             if (checkPlayServices()) {
@@ -175,19 +190,25 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
 
                 Javascript.javascriptEval(webView, jquery, (x) -> {
                     Javascript.javascriptEval(webView, slideCrypto, (y) -> {
-                        Javascript.generatePemKeys(webView, (keys) -> {
-                            try {
-                                JSONObject keypair = new JSONObject(keys);
-                                String privKey = keypair.getString("privateKey");
-                                String pubKey = keypair.getString("publicKey");
+                        Javascript.generateSymmetricKey(webView, (sk) -> {
+                            Javascript.generatePemKeys(webView, (keys) -> {
+                                try {
+                                    JSONObject keypair = new JSONObject(keys);
+                                    String privKey = keypair.getString("privateKey");
+                                    String pubKey = keypair.getString("publicKey");
 
-                                data.setPrivateKey(privKey);
-                                data.setPublicKey(pubKey);
+                                    JSONObject symKeyObject = new JSONObject(sk);
+                                    String symKey = symKeyObject.getString("symKey");
 
-                                runnable.run();
-                            } catch (JSONException e) {
-                                e.printStackTrace();
-                            }
+                                    data.setSymmetricKey(symKey);
+                                    data.setPrivateKey(privKey);
+                                    data.setPublicKey(pubKey);
+
+                                    runnable.run();
+                                } catch (JSONException e) {
+                                    e.printStackTrace();
+                                }
+                            });
                         });
                     });
                 });

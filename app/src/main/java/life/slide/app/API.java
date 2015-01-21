@@ -53,7 +53,10 @@ public class API {
         if (phoneNumber.isEmpty()) {
             TelephonyManager tMgr = (TelephonyManager)
                     context.getSystemService(Context.TELEPHONY_SERVICE);
-            return tMgr.getLine1Number();
+            phoneNumber = tMgr.getLine1Number();
+            if ((phoneNumber == null) || phoneNumber.isEmpty()) {
+                phoneNumber = "15550000000";
+            }
         }
 
         return phoneNumber;
@@ -105,17 +108,12 @@ public class API {
     }
 
     public static ListenableFuture<Boolean> postUser(
-            ListeningExecutorService ex, Context context, String regId) {
+            ListeningExecutorService ex, Context context) {
         DataStore dataStore = DataStore.getSingletonInstance(context);
 
         try {
-            JSONObject device = new JSONObject();
-            device.put(REGISTRATION_ID, regId);
-            device.put(TYPE, "android");
-
             JSONObject ret = new JSONObject();
             ret.put("user", getPhoneNumber(context));
-            ret.put("device", device);
             ret.put("key", dataStore.getSymmetricKey());
             ret.put("public_key", dataStore.getPublicKey());
 
@@ -133,7 +131,7 @@ public class API {
             JSONObject ret = new JSONObject();
             ret.put(REGISTRATION_ID, regId);
             ret.put(TYPE, "android");
-            return postSuccess(ex, getNewDevicePath(context), ret);
+            return putSuccess(ex, getNewDevicePath(context), ret);
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -145,17 +143,23 @@ public class API {
             final ListeningExecutorService ex, final Context context, final String regId) {
         ListenableFuture<Boolean> userExists = getUserExists(ex, context);
         AsyncFunction<Boolean, Boolean> submitUser = (input) -> {
-            if (!input) return postUser(ex, context, regId);
+            Log.i(TAG, "Submitting user...");
+            if (!input) return postUser(ex, context);
+            return returnListenableFuture(ex, true);
+        };
+        AsyncFunction<Boolean, Boolean> submitDevice = (input) -> {
+            Log.i(TAG, "Submitting device...");
             return postRegistrationId(ex, context, regId);
         };
 
         ListenableFuture<Boolean> total = Futures.transform(userExists, submitUser, ex);
+        total = Futures.transform(total, submitDevice, ex);
         return total;
     }
 
     public static ListenableFuture<Boolean> postData(
             final ListeningExecutorService ex,
-            WebView webView, JSONObject fields, JSONObject encryptedPatch, Request request)
+            JSONObject fields, JSONObject encryptedPatch, Request request)
             throws JSONException {
         JSONObject patchedFields = new JSONObject();
 
@@ -172,6 +176,12 @@ public class API {
     public static ListenableFuture<Boolean> postPatchedData(
             final ListeningExecutorService ex, JSONObject fields, Request request) {
         ListenableFuture<Boolean> result = putSuccess(ex, getConversationPath(request.conversationId), fields);
+        return result;
+    }
+
+    public static ListenableFuture<Boolean> postPatch(
+            final ListeningExecutorService ex, Context context, JSONObject fields) {
+        ListenableFuture<Boolean> result = patchSuccess(ex, getProfilePath(context), fields);
         return result;
     }
 
@@ -267,7 +277,11 @@ public class API {
 
     private static AsyncFunction<HttpResponse, Boolean> responseFutureToSuccess(
             final ListeningExecutorService ex) {
-        return (input) -> returnListenableFuture(ex, requestSucceeded(input));
+        return (input) -> {
+            Log.i(TAG, "Status: " + input.getStatusLine().getStatusCode());
+            Log.i(TAG, "Reason phrase: " + input.getStatusLine().getReasonPhrase());
+            return returnListenableFuture(ex, requestSucceeded(input));
+        };
     }
 
     private static AsyncFunction<HttpResponse, Boolean> responseFutureToBoolean(
@@ -329,7 +343,10 @@ public class API {
 
     private static ListenableFuture<HttpResponse> patchRequest(
             final ListeningExecutorService ex, final String url, final JSONObject data) {
-        //TODO: http patch
+        HttpPatch httpPatch = new HttpPatch(url);
+        setJsonEntity(httpPatch, data);
+
+        return response(ex, httpPatch);
     }
 
     private static ListenableFuture<Boolean> succeeded(
@@ -361,6 +378,12 @@ public class API {
     private static ListenableFuture<Boolean> putSuccess(
             final ListeningExecutorService ex, final String url, final JSONObject data) {
         ListenableFuture<HttpResponse> response = putRequest(ex, url, data);
+        return succeeded(ex, response);
+    }
+
+    private static ListenableFuture<Boolean> patchSuccess(
+            final ListeningExecutorService ex, final String url, final JSONObject data) {
+        ListenableFuture<HttpResponse> response = patchRequest(ex, url, data);
         return succeeded(ex, response);
     }
 }

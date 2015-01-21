@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.Locale;
 import java.util.concurrent.Future;
 
+import android.app.Activity;
 import android.content.*;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
@@ -41,6 +42,7 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
     public GoogleCloudMessaging gcm;
     public String regId = "";
     public SharedPreferences prefs;
+    public WebView aux;
 
     //TODO: make sure that MainActivity responds to RequestActivity intent for removal
 
@@ -78,29 +80,15 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
             DataStore dataStore = DataStore.getSingletonInstance(this);
             Log.i(TAG, "Got public key: " + dataStore.getPublicKey());
 
-            ListeningExecutorService ex = API.newExecutorService();
-            Futures.addCallback(API.getProfile(ex, this), new FutureCallback<JSONObject>() {
-                @Override
-                public void onSuccess(JSONObject result) {
-                    try {
-                        dataStore.storeProfile(result);
-                    } catch (JSONException e) {
-                        e.printStackTrace();
-                    }
+            boolean needsRegistration = registerUser();
+            if (needsRegistration)
+                try {
+                    dataStore.storeProfile(new JSONObject());
+                } catch (JSONException e) {
+                    e.printStackTrace();
                 }
-
-                @Override
-                public void onFailure(Throwable thrown) {
-                }
-            });
-
-            prefs = getGCMPreferences();
-            if (checkPlayServices()) {
-                gcm = GoogleCloudMessaging.getInstance(this);
-                regId = getRegistrationId();
-                Log.i(TAG, "regId: " + regId);
-                if (regId.isEmpty()) registerInBackground();
-            }
+            else
+                initializeProfile();
         });
     }
 
@@ -169,29 +157,45 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
         }
     }
 
+    private boolean registerUser() {
+        prefs = getGCMPreferences();
+        if (checkPlayServices()) {
+            gcm = GoogleCloudMessaging.getInstance(this);
+            regId = getRegistrationId();
+            Log.i(TAG, "regId: " + regId);
+            if (regId.isEmpty()) {
+                registerInBackground();
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private void initializeKeypair(Runnable runnable) {
         Log.i(TAG, "Initializing keypair");
 
         DataStore data = DataStore.getSingletonInstance(this);
         String privateKey = data.getPrivateKey();
-        if (privateKey.equals("")) {
-            WebView webView = new WebView(this);
-            webView.getSettings().setJavaScriptEnabled(true);
-            this.addContentView(webView, new ViewGroup.LayoutParams(1, 1)); //to make sure javascript is working
 
-            try {
-                String baseUrl = getResources().getString(R.string.hostname);
-                webView.loadDataWithBaseURL(baseUrl,
-                        "<html><head></head><body></body></html>", "text/html", "utf-8", "");
+        aux = new WebView(this);
+        aux.getSettings().setJavaScriptEnabled(true);
+        this.addContentView(aux, new ViewGroup.LayoutParams(1, 1)); //to make sure javascript is working
+        String baseUrl = getResources().getString(R.string.hostname);
+        aux.loadDataWithBaseURL(baseUrl,
+                "<html><head></head><body></body></html>", "text/html", "utf-8", "");
 
-                DataStore dataStore = DataStore.getSingletonInstance(this);
-                String jquery = dataStore.readResource(R.raw.jquery);
-                String slideCrypto = dataStore.readResource(R.raw.slide);
+        DataStore dataStore = DataStore.getSingletonInstance(this);
+        try {
+            String jquery = dataStore.readResource(R.raw.jquery);
+            String slideCrypto = dataStore.readResource(R.raw.slide);
 
-                Javascript.javascriptEval(webView, jquery, (x) -> {
-                    Javascript.javascriptEval(webView, slideCrypto, (y) -> {
-                        Javascript.generateSymmetricKey(webView, (sk) -> {
-                            Javascript.generatePemKeys(webView, (keys) -> {
+            Javascript.javascriptEval(aux, jquery, (x) -> {
+                Javascript.javascriptEval(aux, slideCrypto, (y) -> {
+                    if (privateKey.equals("")) {
+
+                        Javascript.generateSymKey(aux, (sk) -> {
+                            Javascript.generatePemKeys(aux, (keys) -> {
                                 try {
                                     JSONObject keypair = new JSONObject(keys);
                                     String privKey = keypair.getString("privateKey");
@@ -210,14 +214,43 @@ public class MainActivity extends ActionBarActivity implements ActionBar.TabList
                                 }
                             });
                         });
+                    } else {
+                        runnable.run();
+                    }
+                });
+            });
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void initializeProfile() {
+        ListeningExecutorService ex = API.newExecutorService();
+        Activity self = this;
+        Futures.addCallback(API.getProfile(ex, this), new FutureCallback<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject result) {
+                Log.i(TAG, "Storing profile: " + result.toString());
+
+                runOnUiThread(() -> {
+                    DataStore dataStore = DataStore.getSingletonInstance(self);
+                    Javascript.decrypt(aux, result.toString(), dataStore.getSymmetricKey(), (decryptedJson) -> {
+                        try {
+                            Log.i(TAG, "Decrypted profile: " + decryptedJson);
+
+                            JSONObject decryptedProfile = new JSONObject(decryptedJson);
+                            dataStore.storeProfile(decryptedProfile);
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
                     });
                 });
-            } catch (IOException e) {
-                e.printStackTrace();
             }
-        } else {
-            runnable.run();
-        }
+
+            @Override
+            public void onFailure(Throwable thrown) {
+            }
+        });
     }
 
     private String getRegistrationId() {

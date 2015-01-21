@@ -23,9 +23,9 @@ public class Request {
 
     private static final String VERB = "verb";
 
-    public static final String REQUEST = "request";
-    public static final String DEPOSIT = "deposit";
-    public static final String FORCE_DEPOSIT = "force_deposit";
+    public static final String REQUEST = "verb_request";
+    public static final String DEPOSIT = "verb_deposit";
+    public static final String FORCE_DEPOSIT = "verb_force_deposit";
 
     public String conversationId; //actually conversation id
     public String name;
@@ -69,7 +69,10 @@ public class Request {
 
     public String toJson() {
         JSONObject object = new JSONObject();
+
         try {
+            object.put(VERB, verb);
+
             JSONObject conversationJson = new JSONObject();
             conversationJson.put(CONVERSATION_ID, conversationId);
             conversationJson.put(NAME, name);

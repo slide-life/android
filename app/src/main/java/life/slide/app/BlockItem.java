@@ -21,10 +21,6 @@ public class BlockItem {
         //TODO
     }
 
-    public boolean hasOptions() {
-        return dataStore.inIndex(getBlockName());
-    }
-
     public String getBlockName() {
         return this.blockName;
     }

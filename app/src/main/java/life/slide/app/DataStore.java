@@ -33,7 +33,7 @@ public class DataStore {
     private final String PRIVATE_KEY_FILE = "private_key";
 
     public Context context;
-    public SharedPreferences blocks, requests, privateKey;
+    public SharedPreferences requests, privateKey;
 
     public static DataStore getSingletonInstance() {
         return DataStore.singletonInstance; //not safe
@@ -51,6 +51,9 @@ public class DataStore {
         this.context = context;
         this.requests = context.getSharedPreferences(REQUEST_STORAGE_FILE, Context.MODE_PRIVATE);
         this.privateKey = context.getSharedPreferences(PRIVATE_KEY_FILE, Context.MODE_PRIVATE);
+
+        this.sharedProfile = new HashMap<>();
+
         initializeRequests();
     }
 
@@ -71,7 +74,7 @@ public class DataStore {
             Set<String> value = patch.get(key);
 
             if (!sharedProfile.containsKey(key)) {
-                sharedProfile.put(key, new HashSet<String>());
+                sharedProfile.put(key, new HashSet<>());
             }
 
             Set<String> profile = sharedProfile.get(key);
@@ -85,7 +88,12 @@ public class DataStore {
     }
 
     public Set<String> getBlockOptions(String blockName) {
-        return sharedProfile.get(blockName);
+        if (sharedProfile.containsKey(blockName)) return sharedProfile.get(blockName);
+        return new HashSet<>();
+    }
+
+    public boolean isOptionForBlock(String option, String blockName) {
+        return getBlockOptions(blockName).contains(option);
     }
 
     public void addOptionToBlock(String blockName, String option) {
@@ -140,10 +148,6 @@ public class DataStore {
         ArrayList<Request> ret = new ArrayList<Request>();
         for (String s : index) ret.add(new Request(s));
         return ret;
-    }
-
-    public boolean inIndex(String blockName) {
-        return getIndex(blocks).contains(blockName);
     }
 
     private void initializeRequests() {

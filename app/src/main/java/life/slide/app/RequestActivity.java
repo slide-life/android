@@ -13,11 +13,13 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.*;
 import com.google.common.util.concurrent.*;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 
@@ -133,40 +135,54 @@ public class RequestActivity extends ActionBarActivity {
         Javascript.javascriptEval(webForm, addBlocksCommand, (x) -> {});
     }
 
-    private void saveFormValues(String serializedForm) {
+    private JSONObject saveFormValues(String serializedForm) {
         DataStore dataStore = DataStore.getSingletonInstance();
+        JSONObject ret = new JSONObject();  //patch
+
         try {
-            JSONObject jsonForm = new JSONObject(serializedForm);
-            Iterator<String> jsonKeys = jsonForm.keys();
+            JSONObject jsonFields = new JSONObject(serializedForm);
+            Iterator<String> jsonKeys = jsonFields.keys();
             while (jsonKeys.hasNext()) {
                 String jsonKey = jsonKeys.next();
-                String jsonValue = jsonForm.getString(jsonKey);
+                String jsonValue = jsonFields.getString(jsonKey);
+                if (! dataStore.isOptionForBlock(jsonKey, jsonValue)) {
+                    JSONArray blockOptions = new JSONArray(dataStore.getBlockOptions(jsonKey));
+                    blockOptions.put(jsonValue);
+
+                    ret.put(jsonKey, Javascript.stringify(blockOptions));
+                }
                 dataStore.addOptionToBlock(jsonKey, jsonValue);
             }
+
+            return ret;
         } catch (JSONException e) {
             e.printStackTrace();
         }
+
+        return null;
     }
 
     private void initializeSubmit() {
+        DataStore dataStore = DataStore.getSingletonInstance(this);
+
         submitButton.setOnClickListener((view) -> {
             Javascript.getResponses(webForm, (formFields) -> {
                 Log.i(TAG, "Form: " + formFields);
-                saveFormValues(formFields);
+                JSONObject patch = saveFormValues(formFields);
 
                 Javascript.decryptSymKey(webForm, request.key, (key) -> {
                     Log.i(TAG, "Decrypted key: " + key);
                     Javascript.encrypt(webForm, formFields, key, (encryptedResponses) -> {
                         Log.i(TAG, "Encrypted responses: " + encryptedResponses);
 
-
                         ListeningExecutorService exec = API.newExecutorService();
                         try {
                             JSONObject jsonEncryptedResponses = new JSONObject(encryptedResponses);
+                            String userSymKey = dataStore.getSymmetricKey();
 
-                            Javascript.encrypt(webForm, formFields, key, (encryptedPatch) -> {
+                            Javascript.encryptPatch(webForm, patch.toString(), userSymKey, (encryptedPatch) -> {
                                 try {
-                                    ListenableFuture<Boolean> dataPost = API.postData(exec, webForm,
+                                    ListenableFuture<Boolean> dataPost = API.postData(exec,
                                             jsonEncryptedResponses,
                                             new JSONObject(encryptedPatch),
                                             request);
@@ -196,7 +212,6 @@ public class RequestActivity extends ActionBarActivity {
                                 }
                             });
                         } catch (JSONException e) {
-                            Log.i(TAG, "JSON exception for json: " + encryptedResponses + "!");
                             e.printStackTrace();
                         }
                     });

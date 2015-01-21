@@ -8,6 +8,7 @@ import android.view.MenuItem;
 import android.webkit.WebView;
 import android.widget.Button;
 import android.widget.TextView;
+import com.google.common.util.concurrent.ListeningExecutorService;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -29,7 +30,7 @@ public class DepositActivity extends ActionBarActivity {
         setContentView(R.layout.activity_deposit);
 
         Intent intent = getIntent();
-        request = new Request(intent.getStringExtra("request"));
+        request = new Request(intent.getStringExtra("deposit"));
 
         requestLabel = (TextView) findViewById(R.id.requestLabel);
         depositView = (WebView) findViewById(R.id.depositView);
@@ -39,6 +40,7 @@ public class DepositActivity extends ActionBarActivity {
 
         try {
             Javascript.initializeWebView(depositView, (result) -> {
+                initializeWeb();
                 submitButton.setEnabled(true);
             });
         } catch (IOException e) {
@@ -71,6 +73,10 @@ public class DepositActivity extends ActionBarActivity {
         return super.onOptionsItemSelected(item);
     }
 
+    private void initializeWeb() {
+
+    }
+
     private void initializeSubmit() {
         submitButton.setOnClickListener((view) -> {
             Javascript.decryptSymKey(depositView, request.key, (key) -> {
@@ -78,9 +84,22 @@ public class DepositActivity extends ActionBarActivity {
                     Javascript.decrypt(depositView, Javascript.profileToJsonObject(request.fields).toString(), key,
                         (decryptedData) -> {
                             try {
-                                JSONObject decryptedFields = new JSONObject(decryptedData);
-                                DataStore.getSingletonInstance().applyPatch(decryptedFields);
+                                DataStore dataStore = DataStore.getSingletonInstance();
 
+                                JSONObject decryptedFields = new JSONObject(decryptedData);
+                                dataStore.applyPatch(decryptedFields);
+
+                                Javascript.encryptPatch(depositView, decryptedData, dataStore.getSymmetricKey(),
+                                        (encryptedPatch) -> {
+                                            try {
+                                                JSONObject encryptedPatchJson = new JSONObject(encryptedPatch);
+
+                                                ListeningExecutorService ex = API.newExecutorService();
+                                                API.postPatch(ex, this, encryptedPatchJson);
+                                            } catch (JSONException e) {
+                                                e.printStackTrace();
+                                            }
+                                        });
                             } catch (JSONException e) {
                                 e.printStackTrace();
                             }

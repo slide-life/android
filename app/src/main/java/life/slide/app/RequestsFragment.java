@@ -99,7 +99,10 @@ public class RequestsFragment extends android.support.v4.app.Fragment {
                 Log.i(TAG, "Starting request activity...");
                 startActivity(requestActivityIntent);
             } else if (req.verb.equals(Request.DEPOSIT)) {
-
+                Intent depositActivityIntent = new Intent(view.getContext(), DepositActivity.class);
+                depositActivityIntent.putExtra("deposit", req.toJson());
+                Log.i(TAG, "Starting deposit activity...");
+                startActivity(depositActivityIntent);
             }
         });
 

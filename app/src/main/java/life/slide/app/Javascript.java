@@ -51,8 +51,17 @@ public class Javascript {
         while (keys.hasNext()) {
             String key = keys.next();
             Set<String> value = new HashSet<String>();
-            JSONArray array = json.getJSONArray(key);
-            for (int i = 0; i < array.length(); i++) value.add(array.getString(i));
+
+            /*
+            Object jsonValue = json.get(key);
+            if (jsonValue instanceof JSONArray) {
+                JSONArray array = (JSONArray) jsonValue;
+                for (int i = 0; i < array.length(); i++) value.add(array.getString(i));
+            } else if (jsonValue instanceof String) {
+                value.add((String) jsonValue);
+            }*/
+            JSONArray jsonValue = new JSONArray(json.getString(key));
+            for (int i = 0; i < jsonValue.length(); i++) value.add(jsonValue.getString(i));
 
             ret.put(key, value);
         }
@@ -74,19 +83,25 @@ public class Javascript {
 
     public static void decrypt(WebView webView, String jsonObject, String key, OnJavascriptEvalListener cb) {
         javascriptEval(webView,
-                String.format("JSON.stringify(Slide.crypto.AES.decryptData(%s, '%s'))", jsonObject, key),
+                String.format("Slide.crypto.AES.decryptData(%s, '%s')", jsonObject, key),
                 cb);
     }
 
     public static void encrypt(WebView webView, String jsonObject, String key, OnJavascriptEvalListener cb) {
         javascriptEval(webView,
-                String.format("({fields: Slide.crypto.AES.encryptData(%s, %s), blocks:[]})", jsonObject, key),
+                String.format("({fields: Slide.crypto.AES.encryptData(%s, '%s'), blocks:[]})", jsonObject, key),
                 cb);
     }
 
-    public static void generateSymmetricKey(WebView webView, OnJavascriptEvalListener cb) {
+    public static void encryptPatch(WebView webView, String jsonObject, String key, OnJavascriptEvalListener cb) {
         javascriptEval(webView,
-                "{symKey: Slide.crypto.AES.generateKey()}",
+                String.format("Slide.crypto.AES.encryptData(%s, '%s')", jsonObject, key),
+                cb);
+    }
+
+    public static void generateSymKey(WebView webView, OnJavascriptEvalListener cb) {
+        javascriptEval(webView,
+                "({ symKey: Slide.crypto.AES.generateKey() })",
                 cb);
     }
 
@@ -109,8 +124,15 @@ public class Javascript {
     public static void decryptSymKey(WebView webView, String key, OnJavascriptEvalListener cb) {
         String privateKey = DataStore.getSingletonInstance().getPrivateKey();
         javascriptEval(webView,
-                String.format("Slide.crypto.decryptStringWithPackedKey('%s', '%s')", key, privateKey),
-                cb);
+                String.format("({ symKey: Slide.crypto.decryptStringWithPackedKey('%s', '%s') })", key, privateKey),
+                (str) -> {
+                    try {
+                        JSONObject jo = new JSONObject(str);
+                        cb.callback(jo.getString("symKey"));
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                });
     }
 
     public static void encryptSymKey(WebView webView, String key, OnJavascriptEvalListener cb) {
@@ -136,5 +158,9 @@ public class Javascript {
         Javascript.javascriptEval(webView, jquery, (x) -> {
             Javascript.javascriptEval(webView, slideCrypto, cb);
         });
+    }
+
+    public static String stringify(JSONArray a) {
+        return a.toString();
     }
 }

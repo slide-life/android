@@ -31,7 +31,7 @@ public class Request {
     public String name;
     public String description;
     public ArrayList<String> blocks;
-    public Map<String, Set<String>> fields;
+    public Map<String, String> fields;
     public String key;
     public String verb;
 

@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
+import java.util.concurrent.Future;
 
 public class RequestActivity extends ActionBarActivity {
     private static final String TAG = "Slide -> RequestActivity";
@@ -50,7 +51,6 @@ public class RequestActivity extends ActionBarActivity {
         try {
             DataStore dataStore = DataStore.getSingletonInstance(this);
             slideJs = dataStore.readResource(R.raw.slide);
-            slideFormJs = dataStore.readResource(R.raw.slide_form);
             stylesCss = dataStore.readResource(R.raw.styles);
             jqueryJs = dataStore.readResource(R.raw.jquery);
             formTemplateHtml = dataStore.readResource(R.raw.form_template);
@@ -74,7 +74,6 @@ public class RequestActivity extends ActionBarActivity {
         submitButton = (Button) findViewById(R.id.submitButton);
 
         initializeWeb();
-        initializeSubmit();
     }
 
 
@@ -102,7 +101,6 @@ public class RequestActivity extends ActionBarActivity {
 
     private void initializeWeb() {
         formTemplateHtml = formTemplateHtml
-                .replace("{{@slide-form.js}}", slideFormJs)
                 .replace("{{@jquery.js}}", jqueryJs)
                 .replace("{{@styles.css}}", stylesCss)
                 .replace("{{@slide.js}}", slideJs);
@@ -118,26 +116,29 @@ public class RequestActivity extends ActionBarActivity {
     }
 
     private void initializeForm() {
-        ArrayList<String> fieldCommands = new ArrayList<>();
-        for (String blockName : request.blocks) {
-            Log.i(TAG, "Processing block " + blockName);
-            BlockItem block = new BlockItem(blockName);
-            Set<String> options = block.getOptions();
-            ArrayList<String> optionsQuoted = new ArrayList<>();
-            for (String o : options) optionsQuoted.add(String.format("\"%s\"", o));
+        Javascript.decryptSymKey(webForm, request.key, (formSymKey) -> {
+            DataStore dataStore = DataStore.getSingletonInstance(this);
 
-            fieldCommands.add(String.format("Forms.selectField('%s', [%s], true)",
-                    blockName, TextUtils.join(",", optionsQuoted)));
-        }
-
-        String addBlocksCommand = String.format("Forms.populateForm([%s]);", TextUtils.join(",", fieldCommands));
-        Log.i(TAG, "JS command: " + addBlocksCommand);
-        Javascript.javascriptEval(webForm, addBlocksCommand, (x) -> {});
+            try {
+                JSONObject stringifiedProfile = Javascript.profileToJsonObject(dataStore.sharedProfile);
+                Javascript.generateForm(
+                        webForm,
+                        request.blocks,
+                        stringifiedProfile.toString(), //need to unstringify
+                        dataStore.getSymmetricKey(),
+                        formSymKey,
+                        (result) -> {
+                            onSubmit(result);
+                        }
+                );
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        });
     }
 
-    private JSONObject saveFormValues(String serializedForm) {
+    private void saveFormValues(String serializedForm) {
         DataStore dataStore = DataStore.getSingletonInstance();
-        JSONObject ret = new JSONObject();  //patch
 
         try {
             JSONObject jsonFields = new JSONObject(serializedForm);
@@ -145,78 +146,55 @@ public class RequestActivity extends ActionBarActivity {
             while (jsonKeys.hasNext()) {
                 String jsonKey = jsonKeys.next();
                 String jsonValue = jsonFields.getString(jsonKey);
-                if (! dataStore.isOptionForBlock(jsonKey, jsonValue)) {
-                    JSONArray blockOptions = new JSONArray(dataStore.getBlockOptions(jsonKey));
-                    blockOptions.put(jsonValue);
-
-                    ret.put(jsonKey, Javascript.stringify(blockOptions));
-                }
-                dataStore.addOptionToBlock(jsonKey, jsonValue);
+                dataStore.setBlockOptions(jsonKey, jsonValue);
             }
-
-            return ret;
         } catch (JSONException e) {
             e.printStackTrace();
         }
-
-        return null;
     }
 
-    private void initializeSubmit() {
-        DataStore dataStore = DataStore.getSingletonInstance(this);
+    private void onSubmit(String result) {
+        DataStore dataStore = DataStore.getSingletonInstance();
+        Activity self = this;
 
-        submitButton.setOnClickListener((view) -> {
-            Javascript.getResponses(webForm, (formFields) -> {
-                Log.i(TAG, "Form: " + formFields);
-                JSONObject patch = saveFormValues(formFields);
+        try {
+            JSONObject aggregateResponses = new JSONObject(result);
+            JSONObject encryptedResponses = aggregateResponses.getJSONObject("encryptedResponses");
+            JSONObject encryptedPatch = aggregateResponses.getJSONObject("encryptedPatch");
+            JSONObject patch = aggregateResponses.getJSONObject("patch");
 
-                Javascript.decryptSymKey(webForm, request.key, (key) -> {
-                    Log.i(TAG, "Decrypted key: " + key);
-                    Javascript.encrypt(webForm, formFields, key, (encryptedResponses) -> {
-                        Log.i(TAG, "Encrypted responses: " + encryptedResponses);
+            dataStore.applyPatch(patch);
 
-                        ListeningExecutorService exec = API.newExecutorService();
-                        try {
-                            JSONObject jsonEncryptedResponses = new JSONObject(encryptedResponses);
-                            String userSymKey = dataStore.getSymmetricKey();
+            JSONObject responsesWithPatch = new JSONObject();
+            responsesWithPatch.put("patch", encryptedPatch);
+            Iterator<String> keys = encryptedResponses.keys();
+            while (keys.hasNext()) {
+                String jKey = keys.next();
+                responsesWithPatch.put(jKey, encryptedResponses.get(jKey));
+            }
 
-                            Javascript.encryptPatch(webForm, patch.toString(), userSymKey, (encryptedPatch) -> {
-                                try {
-                                    ListenableFuture<Boolean> dataPost = API.postData(exec,
-                                            jsonEncryptedResponses,
-                                            new JSONObject(encryptedPatch),
-                                            request);
-                                    Activity self = this;
-                                    Futures.addCallback(dataPost, new FutureCallback<Boolean>() {
-                                        @Override
-                                        public void onSuccess(Boolean result) {
-                                            //TODO: do something other than just go back
-                                            Intent mainIntent = new Intent(self, MainActivity.class);
-                                            Log.i(TAG, "Back to main activity...");
-                                            startActivity(mainIntent);
-                                        }
+            ListeningExecutorService ex = API.newExecutorService();
+            ListenableFuture<Boolean> patchResult = API.postPatchedData(ex, responsesWithPatch, request);
 
-                                        @Override
-                                        public void onFailure(Throwable thrown) {
-                                            //TODO: do something better than just toast it
-                                            Context context = getApplicationContext();
-                                            CharSequence toastText = thrown.getMessage();
-                                            int duration = Toast.LENGTH_SHORT;
+            Futures.addCallback(patchResult, new FutureCallback<Boolean>() {
+                @Override
+                public void onSuccess(Boolean result) {
+                    Intent mainIntent = new Intent(self, MainActivity.class);
+                    Log.i(TAG, "Back to main activity...");
+                    startActivity(mainIntent);
+                }
 
-                                            Toast toast = Toast.makeText(context, toastText, duration);
-                                            toast.show();
-                                        }
-                                    });
-                                } catch (JSONException e) {
-                                    e.printStackTrace();
-                                }
-                            });
-                        } catch (JSONException e) {
-                            e.printStackTrace();
-                        }
-                    });
-                });
+                @Override
+                public void onFailure(Throwable thrown) {
+                    CharSequence toastText = thrown.getMessage();
+                    int duration = Toast.LENGTH_SHORT;
+
+                    Toast toast = Toast.makeText(self, toastText, duration);
+                    toast.show();
+                }
             });
-        });
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
     }
 }

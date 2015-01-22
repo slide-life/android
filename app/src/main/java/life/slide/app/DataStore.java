@@ -20,7 +20,6 @@ import java.util.*;
  */
 public class DataStore {
     private static DataStore singletonInstance;
-    private static Map<String, Set<String>> sharedProfile;
 
     private final String TAG = "Slide -> DataStore";
 
@@ -34,6 +33,7 @@ public class DataStore {
 
     public Context context;
     public SharedPreferences requests, privateKey;
+    public static Map<String, String> sharedProfile;
 
     public static DataStore getSingletonInstance() {
         return DataStore.singletonInstance; //not safe
@@ -69,35 +69,29 @@ public class DataStore {
         this.sharedProfile = Javascript.jsonObjectToProfile(profile);
     }
 
-    public void applyPatch(Map<String, Set<String>> patch) throws JSONException {
+    public void applyPatch(Map<String, String> patch) throws JSONException {
         for (String key : patch.keySet()) {
-            Set<String> value = patch.get(key);
-
-            if (!sharedProfile.containsKey(key)) {
-                sharedProfile.put(key, new HashSet<>());
-            }
-
-            Set<String> profile = sharedProfile.get(key);
-            profile.addAll(value);
+            String value = patch.get(key);
+            sharedProfile.put(key, value);
         }
     }
 
     public void applyPatch(JSONObject patch) throws JSONException {
-        Map<String, Set<String>> patchMap = Javascript.jsonObjectToProfile(patch);
+        Map<String, String> patchMap = Javascript.jsonObjectToProfile(patch);
         applyPatch(patchMap);
     }
 
-    public Set<String> getBlockOptions(String blockName) {
+    public String getBlockOptions(String blockName) {
         if (sharedProfile.containsKey(blockName)) return sharedProfile.get(blockName);
-        return new HashSet<>();
+        return "{}";
     }
 
     public boolean isOptionForBlock(String option, String blockName) {
         return getBlockOptions(blockName).contains(option);
     }
 
-    public void addOptionToBlock(String blockName, String option) {
-        getBlockOptions(blockName).add(option);
+    public void setBlockOptions(String blockName, String options) {
+        sharedProfile.put(blockName, options);
     }
 
     public void setPrivateKey(String s) {

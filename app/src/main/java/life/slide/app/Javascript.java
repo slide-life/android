@@ -3,6 +3,7 @@ package life.slide.app;
 import android.app.Activity;
 import android.content.Context;
 import android.util.Log;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -32,37 +33,24 @@ public class Javascript {
         return ret;
     }
 
-    public static JSONObject profileToJsonObject(Map<String, Set<String>> profile) throws JSONException {
+    public static JSONObject profileToJsonObject(Map<String, String> profile) throws JSONException {
         JSONObject ret = new JSONObject();
 
         for (String key : profile.keySet()) {
-            Set<String> value = profile.get(key);
-            JSONArray valueArray = new JSONArray(value);
-            ret.put(key, valueArray);
+            String value = profile.get(key);
+            ret.put(key, value);
         }
 
         return ret;
     }
 
-    public static Map<String, Set<String>> jsonObjectToProfile(JSONObject json) throws JSONException {
-        Map<String, Set<String>> ret = new HashMap<>();
+    public static Map<String, String> jsonObjectToProfile(JSONObject json) throws JSONException {
+        Map<String, String> ret = new HashMap<>();
 
         Iterator<String> keys = json.keys();
         while (keys.hasNext()) {
             String key = keys.next();
-            Set<String> value = new HashSet<String>();
-
-            /*
-            Object jsonValue = json.get(key);
-            if (jsonValue instanceof JSONArray) {
-                JSONArray array = (JSONArray) jsonValue;
-                for (int i = 0; i < array.length(); i++) value.add(array.getString(i));
-            } else if (jsonValue instanceof String) {
-                value.add((String) jsonValue);
-            }*/
-            JSONArray jsonValue = new JSONArray(json.getString(key));
-            for (int i = 0; i < jsonValue.length(); i++) value.add(jsonValue.getString(i));
-
+            String value = json.getString(key);
             ret.put(key, value);
         }
 
@@ -79,6 +67,62 @@ public class Javascript {
 
     public static void getResponses(WebView webView, OnJavascriptEvalListener cb) {
         javascriptEval(webView, "Forms.formFields()", cb);
+    }
+
+    public static interface FormListener {
+        @JavascriptInterface
+        public void callback(String fields);
+    }
+    public static void generateForm(WebView webView,
+                                    ArrayList<String> blocks,
+                                    String userData,
+                                    String symKey,
+                                    String formSymKey,
+                                    FormListener cb) {
+        Javascript.destringifyUserData(webView, userData, (result) -> {
+
+        });
+        webView.addJavascriptInterface(cb, "Android");
+        webView.loadUrl(String.format("javascript:" +
+                "Slide.Form.createFromIdentifiers(%s, function (form) {" +
+                    "form.build(%s, { onSubmit: function (evt) {" +
+                        "var serializedResponses = form.serialize();" +
+                        "var patchedResponses = form.getStringifiedPatchedUserData();" +
+                        "var encryptedResponses = Slide.crypto.AES.encryptData(serializedResponses, '%s');" +
+                        "var encryptedPatch = Slide.crypto.AES.encryptData(patchedResponses, '%s');" +
+                        "Android.callback({" +
+                            "encryptedResponses: encryptedResponses," +
+                            "encryptedPatch: encryptedPatch," +
+                            "patch: patchedResponses" +
+                        "});" +
+                    "} } );" +
+                "});",
+                getIdentifierString(blocks),
+                userData,
+                formSymKey,
+                symKey));
+    }
+
+    public static String getIdentifierString(ArrayList<String> blocks) {
+        JSONArray array = new JSONArray();
+        for (String s : blocks) array.put(s);
+        return array.toString();
+    }
+
+    public static void destringifyUserData(WebView webView, String stringifiedData, OnJavascriptEvalListener cb) {
+        javascriptEval(webView, String.format(
+               "(function (sd) {" +
+                   "var ret = {};" +
+                   "for (var __k in sd) {" +
+                       "ret[__k] = JSON.parse(sd[__k]);" +
+                   "}" +
+               "})(%s)",
+                stringifiedData
+        ), cb);
+    }
+
+    public static void getStringifiedPatch(WebView webView, String formName, OnJavascriptEvalListener cb) {
+        javascriptEval(webView, String.format("%s.getStringifiedPatchedUserData()", formName), cb);
     }
 
     public static void decrypt(WebView webView, String jsonObject, String key, OnJavascriptEvalListener cb) {
